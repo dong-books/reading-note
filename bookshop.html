@@ -6,17 +6,17 @@
 <title>작은책방</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src blob:; connect-src https://script.google.com https://script.googleusercontent.com data: blob:; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
-<meta name="theme-color" content="#5B3A29">
+<meta name="theme-color" content="#1F3A5F">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="bookshop.css?v=1">
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Nanum+Gothic:wght@400;700&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="bookshop.css?v=2">
 </head>
 <body>
 <div class="wrap">
-  <div id="syncBanner" hidden style="background:#F6E2B3;color:#3E2A1E;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:.9rem"></div>
+  <div id="syncBanner" hidden style="background:#DCE8F5;color:#1C2A3A;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:.9rem"></div>
   <header>
-    <h1 id="title">나의 작은책방</h1>
+    <div><h1 id="title">나의 작은책방</h1><p class="since" id="sinceText"></p></div>
     <p><a class="btn" href="index.html">← 독서노트</a></p>
   </header>
 
@@ -25,8 +25,8 @@
       <div class="views" role="tablist" aria-label="화면">
         <button role="tab" data-view="out">밖에서</button>
         <button role="tab" data-view="in">책방 안</button>
-        <button role="tab" data-view="today">오늘의 책</button>
-        <button role="tab" data-view="wall">살 책 벽</button>
+        <button role="tab" data-view="today" id="viewTodayBtn">추천 책</button>
+        <button role="tab" data-view="wall">입고 예정</button>
       </div>
       <div class="scene-box"><svg id="scene" viewBox="0 0 1080 1350" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="스테인드글라스 창, 커피·베이커리 카운터, 책장과 가판대가 있는 작은책방 그림"></svg><button class="cover-pop" id="coverPop" hidden aria-label="책 다시 꽂기"></button></div>
       <div class="pager" id="pager" hidden>
@@ -38,9 +38,9 @@
       <div class="share">
         <button class="btn primary" id="carouselBtn">넘겨보기 사진 저장</button>
         <button class="btn" id="exportBtn">지금 화면 저장</button>
-        <button class="btn" id="pickBtn">오늘의 책 고르기</button>
-        <button class="btn" id="exportListBtn">살 책 목록 저장</button>
-        <small>'넘겨보기 사진'은 밖에서, 책방 안, 오늘의 책, 살 책 벽 순서로 저장돼 인스타 여러 장 게시물로 올리기 좋아요. 인스타그램 세로 비율(1080×1350) PNG예요. 살 책이 11권을 넘으면 여러 장으로 나뉘어요.</small>
+        <button class="btn" id="pickBtn">추천 책 고르기</button>
+        <button class="btn" id="exportListBtn">입고 예정 목록 저장</button>
+        <small>'넘겨보기 사진'은 밖에서, 책방 안, 추천 책, 입고 예정 순서로 저장돼 인스타 여러 장 게시물로 올리기 좋아요. 인스타그램 세로 비율(1080×1350) PNG예요. 입고 예정 책이 11권을 넘으면 여러 장으로 나뉘어요.</small>
         <button class="btn primary" id="recBtn">직접 눌러 영상 녹화</button>
         <button class="btn" id="autoVidBtn">자동 영상 만들기</button>
         <small id="videoStatus">10초짜리 릴스용 세로 영상(1080×1920)으로 저장돼요. 녹화가 시작되면 10초 동안 문을 열고 들어가거나 책을 눌러보세요.</small>
@@ -53,7 +53,7 @@
         <div class="seg" role="group" aria-label="책 상태">
           <button type="button" data-status="read" aria-pressed="true">읽은 책</button>
           <button type="button" data-status="reading" aria-pressed="false">읽는 중</button>
-          <button type="button" data-status="want" aria-pressed="false">살 책</button>
+          <button type="button" data-status="want" aria-pressed="false">입고 예정</button>
         </div>
         <div class="field"><label for="fTitle">제목</label>
           <div class="titleRow"><input id="fTitle" autocomplete="off" placeholder="제목을 적으면 책을 찾아드려요"><button type="button" class="btn" id="findBtn">찾기</button></div>
@@ -92,7 +92,7 @@
         <div class="tabs" role="tablist">
           <button class="tab" role="tab" data-tab="read" id="tabRead">읽은 책</button>
           <button class="tab" role="tab" data-tab="reading" id="tabReading">읽는 중</button>
-          <button class="tab" role="tab" data-tab="want" id="tabWant">살 책</button>
+          <button class="tab" role="tab" data-tab="want" id="tabWant">입고 예정</button>
         </div>
         <ul class="list" id="list"></ul>
       </section>
@@ -115,7 +115,7 @@
           <div class="seg" role="group" aria-label="가져올 상태" id="impSeg">
             <button type="button" data-imp="read" aria-pressed="true">읽은 책</button>
             <button type="button" data-imp="reading" aria-pressed="false">읽는 중</button>
-            <button type="button" data-imp="want" aria-pressed="false">살 책</button>
+            <button type="button" data-imp="want" aria-pressed="false">입고 예정</button>
           </div>
           <div class="imp-preview" id="impPreview"></div>
           <div class="form-actions"><button class="btn primary" id="impBtn">가져오기</button><button class="btn text" id="impCancel">취소</button></div>
@@ -125,9 +125,10 @@
       <section class="card">
         <h2>책방 꾸미기</h2>
         <div class="field"><label for="shopName">간판 이름</label><input id="shopName" maxlength="12"></div>
+        <div class="field"><label for="openDate">오픈일</label><input id="openDate" type="date"></div>
         <div class="field"><label for="breads">오늘의 메뉴 (칠판에 3줄까지)</label><textarea id="breads" rows="3"></textarea></div>
         <div class="status" id="syncStatus">저장 위치 확인 중…</div>
-        <div class="status">책방 버전 1015-1</div>
+        <div class="status">책방 버전 1015-2</div>
       </section>
     </div>
   </div>
@@ -159,17 +160,17 @@
 </div>
 <div class="modal" id="pickModal" hidden>
   <div class="box pick-box" role="dialog" aria-labelledby="pickTitle">
-    <h2 id="pickTitle">오늘의 책 고르기</h2>
+    <h2 id="pickTitle">추천 책 고르기</h2>
     <div class="seg" role="group" aria-label="주제">
-      <button type="button" data-label="오늘 읽을 책">오늘 읽을 책</button>
-      <button type="button" data-label="오늘 소개하고 싶은 책">오늘 소개하고 싶은 책</button>
+      <button type="button" id="pickL1" data-label="">추천하는 책</button>
+      <button type="button" id="pickL2" data-label="지금 읽고 있는 책">지금 읽고 있는 책</button>
     </div>
     <div class="field"><label for="pickLabel">간판 문구 (직접 고쳐도 돼요)</label><input id="pickLabel" maxlength="20"></div>
     <div class="field"><input id="pickFilter" placeholder="제목이나 저자로 찾기" aria-label="책 찾기"></div>
     <p class="hint" id="pickHint">누른 순서대로 한 권씩 꺼내 보여줘요. 최대 5권까지 고를 수 있어요.</p>
     <ul class="pick-list" id="pickList"></ul>
     <div class="form-actions" style="margin-top:12px">
-      <button class="btn primary" id="pickOk">오늘의 책으로 진열</button>
+      <button class="btn primary" id="pickOk">추천 책으로 진열</button>
       <button class="btn" id="pickSkip" hidden>고르지 않고 기본 영상</button>
       <button class="btn text" id="pickCancel">취소</button>
     </div>
@@ -178,6 +179,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="outbox.js?v=14"></script>
-<script src="bookshop.js?v=1"></script>
+<script src="bookshop.js?v=2"></script>
 </body>
 </html>

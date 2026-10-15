@@ -1,15 +1,25 @@
 'use strict';
 (() => {
 const W = 1080, H = 1350;
-const SERIF = "'Gowun Batang','Noto Serif KR','Nanum Myeongjo',serif";
-const SANS = "'Gowun Dodum','Apple SD Gothic Neo','Malgun Gothic',sans-serif";
+const SERIF = "'Nanum Myeongjo','Noto Serif KR',serif";
+const SANS = "'Nanum Gothic','Apple SD Gothic Neo','Malgun Gothic',sans-serif";
+const PEN = "'Nanum Pen Script','Nanum Gothic',cursive";
 const PALETTE = ["#7A2E2E","#2F4F6F","#6B7F3A","#C58B2C","#3E5E5A","#8C5A7A","#B5543C","#40424E","#D9CDAE","#5A6E8C","#9A3F4F","#2E5B44","#A86B3C","#E3B85C"];
 const LIGHT = new Set(["#D9CDAE","#E3B85C"]);
 const CACHE_KEY = "bs_cache_v1", THUMB_KEY = "bs_thumbs_v1";
 const LIST_PER_PAGE = 11;
 
-const TODAY_DEFAULT = { label: "오늘 소개하고 싶은 책", ids: [] };
-let data = { shopName: "작은책방", menu: "소금빵\n무화과 깜빠뉴\n핸드드립 커피", books: [], today: { ...TODAY_DEFAULT } };
+const TODAY_DEFAULT = { label: "", ids: [] };
+const OPEN_DEFAULT = "2026-10-13";
+let data = { shopName: "작은책방", menu: "소금빵\n무화과 깜빠뉴\n핸드드립 커피", openDate: OPEN_DEFAULT, books: [], today: { ...TODAY_DEFAULT } };
+const shortName = () => String(data.shopName || "").replace(/\s*책방\s*$/, "").trim() || data.shopName;
+const recName = () => `${shortName()} 추천`;
+const recLabel = () => `${shortName()}에서 추천하는 책`;
+const OLD_LABELS = ["", "오늘 소개하고 싶은 책", "오늘 읽을 책"];
+const todayLabel = () => OLD_LABELS.includes(data.today.label || "") ? recLabel() : data.today.label;
+const openDot = () => dot(data.openDate || OPEN_DEFAULT);
+function openDays(){ const o = new Date((data.openDate || OPEN_DEFAULT) + "T00:00:00"), t = new Date(today() + "T00:00:00"); return Math.round((t - o) / 86400000) + 1; }
+const openLine = () => { const n = openDays(); return n >= 1 ? `문 연 지 ${n}일째` : `오픈 D-${1 - n}`; };
 let view = "out", wallPage = 0, page = 0, selectedId = null, justAdded = new Set(), editingId = null, formStatus = "read", listTab = "read";
 const coverSource = new Map();
 let thumbs = {}, pendingCover = null, hiddenIds = new Set(), rec = null, online = false;
@@ -28,7 +38,7 @@ function hash(s){ let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0);
 const SYNC_FIELDS = ["title", "author", "status", "readDate", "startDate", "memo", "color"];
 const snapOf = b => JSON.stringify(SYNC_FIELDS.map(k => b[k] || ""));
 const pickSync = b => { const o = { id: b.id }; SYNC_FIELDS.forEach(k => { o[k] = b[k] || ""; }); return o; };
-const settingsOf = () => JSON.stringify({ shopName: data.shopName, menu: data.menu, today: data.today });
+const settingsOf = () => JSON.stringify({ shopName: data.shopName, menu: data.menu, openDate: data.openDate, today: data.today });
 let lastSynced = new Map(), settingsSynced = "", coverQueue = [], syncTimer = null, syncing = false, syncAgain = false, lastRefresh = 0;
 
 function setStatus(t, warn, withLink){
@@ -53,7 +63,7 @@ function saveThumbs(){
 function loadThumbsLocal(){ try { return JSON.parse(localStorage.getItem(THUMB_KEY) || "{}") || {}; } catch { return {}; } }
 function normalize(d){
   d = JSON.parse(JSON.stringify(d || {}));
-  return { shopName: d.shopName || "작은책방", menu: typeof d.menu === "string" ? d.menu : data.menu,
+  return { shopName: d.shopName || "작은책방", menu: typeof d.menu === "string" ? d.menu : data.menu, openDate: /^\d{4}-\d{2}-\d{2}$/.test(d.openDate || "") ? d.openDate : OPEN_DEFAULT,
            books: Array.isArray(d.books) ? d.books.filter(b => b && b.title) : [],
            today: d.today && Array.isArray(d.today.ids) ? { label: String(d.today.label || TODAY_DEFAULT.label), ids: d.today.ids.slice(0, 5) } : { ...TODAY_DEFAULT } };
 }
@@ -120,7 +130,7 @@ async function syncNow(){
     }
     // 4) 간판·메뉴·오늘의 책
     const st = settingsOf();
-    if (settingsSynced && st !== settingsSynced) { await api("shopset", { shopName: data.shopName, menu: data.menu, today: data.today }); settingsSynced = st; }
+    if (settingsSynced && st !== settingsSynced) { await api("shopset", { shopName: data.shopName, menu: data.menu, openDate: data.openDate, today: data.today }); settingsSynced = st; }
     saveCache();
     setStatus("독서노트 구글 시트에 저장됨");
   } catch (e) {
@@ -133,7 +143,7 @@ async function syncNow(){
 }
 function applyServer(r){
   const keepSel = selectedId;
-  data = normalize({ shopName: r.settings.shopName, menu: r.settings.menu, today: r.settings.today, books: r.books });
+  data = normalize({ shopName: r.settings.shopName, menu: r.settings.menu, openDate: r.settings.openDate, today: r.settings.today, books: r.books });
   lastSynced = new Map(data.books.map(b => [b.id, { s: snapOf(b), title: b.title, author: b.author }]));
   settingsSynced = settingsOf();
   selectedId = data.books.some(b => b.id === keepSel) ? keepSel : null;
@@ -231,41 +241,37 @@ function coverSvg(b, x, y, i){
     <rect width="${cw}" height="${ch}" rx="2" fill="none" stroke="#000" stroke-opacity=".22"/>
   </g></g>`;
 }
-function stainedGlass(){
-  const arch = "M62 552 V372 A270 270 0 0 1 235 226 A270 270 0 0 1 408 372 V552 Z";
-  const glass = ["#24467A","#8E2235","#D9A13A","#2F6B4F","#3B5FA0","#B8442F","#6A3B7A","#E8C766"];
-  let panes = "";
-  const cols = [62, 148, 235, 321, 408], rows = [226, 300, 380, 440, 500, 552];
-  for (let r = 0; r < rows.length - 1; r++) for (let c = 0; c < cols.length - 1; c++) {
-    const x0 = cols[c], x1 = cols[c+1], y0 = rows[r], y1 = rows[r+1], mx = (x0+x1)/2, my = (y0+y1)/2;
-    const k = (r * 3 + c * 5);
-    panes += `<path d="M${x0} ${y0} L${mx} ${my} L${x0} ${y1} Z" fill="${glass[k%8]}"/>
-      <path d="M${x0} ${y0} L${x1} ${y0} L${mx} ${my} Z" fill="${glass[(k+2)%8]}"/>
-      <path d="M${x1} ${y0} L${x1} ${y1} L${mx} ${my} Z" fill="${glass[(k+4)%8]}"/>
-      <path d="M${x0} ${y1} L${mx} ${my} L${x1} ${y1} Z" fill="${glass[(k+6)%8]}"/>`;
+let wallTex = "";
+function wallTexture(){
+  if (wallTex) return wallTex;
+  let s = "";
+  for (let i = 0; i < 340; i++) {
+    const h = hash("st" + i), x = h % 1080, y = 56 + (h >> 11) % 1040, r = 1 + (h >> 21) % 3;
+    s += `<circle cx="${x}" cy="${y}" r="${r}" fill="${h & 1 ? "#FFFFFF" : "#1A2533"}" opacity="${(0.06 + ((h >> 4) % 7) / 100).toFixed(2)}"/>`;
   }
-  const cx = 235, cy = 318, R = 60;
-  let rose = `<circle cx="${cx}" cy="${cy}" r="${R+6}" fill="#2A2622"/>`;
-  for (let i = 0; i < 12; i++) {
-    const a0 = i * Math.PI / 6, a1 = (i + 1) * Math.PI / 6;
-    rose += `<path d="M${cx} ${cy} L${(cx+R*Math.cos(a0)).toFixed(1)} ${(cy+R*Math.sin(a0)).toFixed(1)} A${R} ${R} 0 0 1 ${(cx+R*Math.cos(a1)).toFixed(1)} ${(cy+R*Math.sin(a1)).toFixed(1)} Z" fill="${i%2 ? "#24467A" : "#8E2235"}" stroke="#2A2622" stroke-width="3"/>`;
-  }
-  for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; rose += `<circle cx="${(cx+34*Math.cos(a)).toFixed(1)}" cy="${(cy+34*Math.sin(a)).toFixed(1)}" r="11" fill="#D9A13A" stroke="#2A2622" stroke-width="3"/>`; }
-  rose += `<circle cx="${cx}" cy="${cy}" r="16" fill="#E8C766" stroke="#2A2622" stroke-width="3"/>`;
+  for (let i = 0; i < 14; i++) { const h = hash("bl" + i); s += `<ellipse cx="${h % 1080}" cy="${80 + (h >> 9) % 1000}" rx="${60 + h % 90}" ry="${30 + (h >> 5) % 50}" fill="#1A2533" opacity=".05"/>`; }
+  return (wallTex = s);
+}
+function stainedGlass(){ // 나무 창틀 + 창밖 나무 (이름은 예전 그대로)
+  const leaves = [[96,300,66,"#7FA36B"],[176,256,74,"#6B9460"],[300,276,86,"#86AE73"],[386,350,66,"#5F8A57"],[118,430,78,"#739C64"],[262,420,92,"#678F5C"],[362,482,70,"#7FA36B"],[196,524,62,"#5F8A57"]];
+  const vine = Array.from({ length: 9 }, (_, i) => `<ellipse cx="${80 + i * 38 + (i % 2) * 6}" cy="${240 + (i % 3) * 14}" rx="12" ry="7" fill="#4F7F4A" transform="rotate(${(i % 2 ? 30 : -25)} ${80 + i * 38} ${240 + (i % 3) * 14})"/>`).join("");
   return `
-  <clipPath id="archClip"><path d="${arch}"/></clipPath>
-  <path d="${arch}" fill="#5B3A29" transform="translate(235 389) scale(1.07) translate(-235 -389)"/>
-  <g clip-path="url(#archClip)">
-    ${panes}
-    <g stroke="#2A2622" stroke-width="4" fill="none">
-      ${cols.map(x=>`<line x1="${x}" y1="200" x2="${x}" y2="560"/>`).join("")}${rows.map(y=>`<line x1="50" y1="${y}" x2="420" y2="${y}"/>`).join("")}
-    </g>
-    ${rose}
-    <rect x="62" y="200" width="346" height="360" fill="url(#glassShine)"/>
+  <defs><linearGradient id="winSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D8E8F4"/><stop offset="1" stop-color="#F1F0E6"/></linearGradient></defs>
+  <rect x="44" y="214" width="382" height="352" fill="#A4703F"/>
+  <rect x="58" y="228" width="354" height="324" fill="url(#winSky)"/>
+  <clipPath id="winClip"><rect x="58" y="228" width="354" height="324"/></clipPath>
+  <g clip-path="url(#winClip)">
+  <rect x="226" y="380" width="14" height="172" fill="#7B6A52"/>
+  ${leaves.map(([x, y, r, c]) => `<circle cx="${x}" cy="${y + 40}" r="${Math.round(r * 0.82)}" fill="${c}" opacity=".9"/>`).join("")}
+  ${vine}
   </g>
-  <path d="${arch}" fill="none" stroke="#3E2A1E" stroke-width="10"/>
-  <rect x="40" y="548" width="390" height="14" fill="#6B4632"/>
-  <ellipse cx="230" cy="812" rx="150" ry="10" fill="#D9A13A" opacity=".22"/>`;
+  <rect x="58" y="228" width="354" height="324" fill="url(#glassShine)"/>
+  <rect x="58" y="228" width="177" height="324" fill="none" stroke="#F2F0EA" stroke-width="12"/>
+  <rect x="235" y="228" width="177" height="324" fill="none" stroke="#F2F0EA" stroke-width="12"/>
+  <line x1="58" y1="300" x2="412" y2="300" stroke="#F2F0EA" stroke-width="8"/>
+  <rect x="224" y="416" width="5" height="26" rx="2" fill="#C8A060"/><rect x="241" y="416" width="5" height="26" rx="2" fill="#C8A060"/>
+  <rect x="36" y="560" width="398" height="14" fill="#8A5A33"/>
+  <ellipse cx="230" cy="812" rx="150" ry="10" fill="#FFE7A8" opacity=".25"/>`;
 }
 
 function sceneBody(exp){
@@ -281,15 +287,17 @@ function sceneBody(exp){
   const wl = wantLayout();
   const wantTop = SHELF.top + SHELF.wantRow * (SHELF.rowH + SHELF.board);
   const wantRowSvg = `<rect x="496" y="${wantTop}" width="532" height="${SHELF.rowH}" fill="#3F2D22"/>
-    <rect x="712" y="${wantTop - 18}" width="100" height="26" rx="3" fill="#C8912A"/><rect x="716" y="${wantTop - 14}" width="92" height="18" rx="2" fill="none" stroke="#7F5A1A" stroke-width="1.5"/>
-    <text x="762" y="${wantTop + 1}" font-family="${SANS}" font-size="16" fill="#3E2A1E" text-anchor="middle">살 책</text>
-    ${wl.items.length ? wl.items.map(spineSvg).join("") : `<text x="762" y="${wantTop + 92}" font-family="${SANS}" font-size="22" fill="#E9DCC2" opacity=".7" text-anchor="middle">살 책을 담아보세요</text>`}
+    <rect x="702" y="${wantTop - 18}" width="120" height="26" rx="3" fill="#C8912A"/><rect x="706" y="${wantTop - 14}" width="112" height="18" rx="2" fill="none" stroke="#7F5A1A" stroke-width="1.5"/>
+    <text x="762" y="${wantTop + 1}" font-family="${SANS}" font-weight="700" font-size="15" fill="#3E2A1E" text-anchor="middle">입고 예정</text>
+    ${wl.items.length ? wl.items.map(spineSvg).join("") : `<text x="762" y="${wantTop + 92}" font-family="${SANS}" font-size="22" fill="#E9DCC2" opacity=".7" text-anchor="middle">입고 예정 책을 담아보세요</text>`}
     ${wl.more ? `<rect x="${SHELF.x1 - 64}" y="${wantTop + SHELF.rowH - 40}" width="60" height="32" rx="4" fill="#F3E6C8"/><text x="${SHELF.x1 - 34}" y="${wantTop + SHELF.rowH - 18}" font-family="${SANS}" font-size="16" fill="#5B3A29" text-anchor="middle">외 ${wl.more}권</text>` : ""}`;
   const emptyMsg = nRead ? "" : `<text x="762" y="${SHELF.top+92}" font-family="${SANS}" font-size="24" fill="#E9DCC2" opacity=".75" text-anchor="middle">첫 책을 꽂아보세요</text>`;
   const menu = (data.menu || "").split("\n").map(s => s.trim()).filter(Boolean).slice(0,3);
   const planks = Array.from({length: 13}, (_, i) => `<line x1="${i*90+(i%2?20:0)}" y1="1104" x2="${i*90-40+(i%2?20:0)}" y2="1350" stroke="#86593A" stroke-width="2"/>`).join("");
   const breads = [[285,742],[330,738],[375,744],[300,778],[350,780],[400,776]].map(([x,y],i)=>`<ellipse cx="${x}" cy="${y}" rx="${i%3===1?20:17}" ry="11" fill="${i%2?"#B5732F":"#CF9150"}"/><path d="M${x-9} ${y-3} q9 -6 18 0" stroke="#F1D2A0" stroke-width="2" fill="none"/>`).join("");
-  const mugs = [80,140,200,260,320].map((x,i)=>`<rect x="${x}" y="584" width="34" height="26" rx="4" fill="${["#E8E2D6","#6E8B7F","#C8912A","#E8E2D6","#40424E"][i]}"/><path d="M${x+34} 590 q12 6 0 14" stroke="#8C8C80" stroke-width="3" fill="none"/>`).join("");
+  const mugs = [262,312,362].map((x,i)=>`<rect x="${x}" y="584" width="34" height="26" rx="4" fill="${["#E8E2D6","#3F6E9E","#E8E2D6"][i]}"/><path d="M${x+34} 590 q12 6 0 14" stroke="#8C8C80" stroke-width="3" fill="none"/>`).join("");
+  const recCols = todayBooks().slice(0, 3).map(b => spine(b).color).concat(["#2F4F6F", "#9A3F4F", "#C58B2C"]).slice(0, 3);
+  const miniBooks = recCols.map((c, i) => `<rect x="${74 + i * 44}" y="${572 + (i % 2) * 2}" width="34" height="${38 - (i % 2) * 2}" fill="${c}" transform="rotate(${i - 1} ${91 + i * 44} 610)"/><rect x="${78 + i * 44}" y="580" width="26" height="2" fill="#F5EEDD" opacity=".6" transform="rotate(${i - 1} ${91 + i * 44} 610)"/>`).join("");
 
   // 가판대: two slanted ledges, 5 covers each
   const rack = reading.slice(0, 10).map((b, i) => coverSvg(b, 590 + (i % 5) * 82, i < 5 ? 1128 : 1216, i)).join("");
@@ -301,8 +309,8 @@ function sceneBody(exp){
     <linearGradient id="glassShine" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".28"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity="0"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".12"/></linearGradient>
     <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9C6B43"/><stop offset="1" stop-color="#7F5434"/></linearGradient>
   </defs>
-  <rect width="${W}" height="${H}" fill="#CFD6C4"/>
-  <rect width="${W}" height="56" fill="#3E4A44"/>
+  <rect width="${W}" height="${H}" fill="#6F7E91"/>${wallTexture()}
+  <rect width="${W}" height="56" fill="#2B3646"/>
   <rect y="1100" width="${W}" height="250" fill="url(#floor)"/>${planks}
   <rect y="1092" width="${W}" height="12" fill="#5B3A29"/>
 
@@ -312,9 +320,12 @@ function sceneBody(exp){
 
   <rect x="300" y="76" width="480" height="100" rx="10" fill="#5B3A29"/>
   <rect x="312" y="88" width="456" height="76" rx="6" fill="none" stroke="#C8912A" stroke-width="2"/>
-  <text x="540" y="140" font-family="${SERIF}" font-weight="700" font-size="48" fill="#F3E6C8" text-anchor="middle">${esc(data.shopName)}</text>
+  <text x="540" y="136" font-family="${SERIF}" font-weight="800" font-size="46" fill="#F3E6C8" text-anchor="middle">${esc(data.shopName)}</text>
+  <text x="540" y="160" font-family="${SANS}" font-size="15" fill="#F3E6C8" fill-opacity=".8" text-anchor="middle">since ${openDot()}</text>
 
-  <rect x="60" y="610" width="360" height="12" fill="#6B4632"/>${mugs}
+  <rect x="60" y="610" width="360" height="14" fill="#8A5A33"/><rect x="60" y="610" width="360" height="3" fill="#A87A4E"/>${miniBooks}${mugs}
+  <rect x="80" y="630" width="120" height="32" rx="3" fill="#C9A46A"/><rect x="84" y="634" width="112" height="24" rx="2" fill="none" stroke="#8A6A3A" stroke-width="1.5"/>
+  <text x="140" y="654" font-family="${PEN}" font-size="26" fill="#3E2A1E" text-anchor="middle">${esc(cut(recName(), 7))}</text>
 
   <rect x="70" y="690" width="160" height="110" rx="6" fill="#AEB5B6"/>
   <rect x="70" y="690" width="160" height="22" rx="6" fill="#8F9798"/>
@@ -326,12 +337,12 @@ function sceneBody(exp){
   <line x1="258" y1="760" x2="432" y2="760" stroke="#8E9A94" stroke-width="2"/>${breads}
 
   <rect x="30" y="800" width="420" height="26" fill="#ECE7DC"/>
-  <rect x="40" y="826" width="400" height="270" fill="#6E8B7F"/>
-  ${[90,190,290,390].map(x=>`<line x1="${x}" y1="836" x2="${x}" y2="1086" stroke="#5E7A6F" stroke-width="3"/>`).join("")}
+  <rect x="40" y="826" width="400" height="270" fill="#2F4F74"/>
+  ${[90,190,290,390].map(x=>`<line x1="${x}" y1="836" x2="${x}" y2="1086" stroke="#284466" stroke-width="3"/>`).join("")}
   <rect x="84" y="866" width="312" height="180" rx="4" fill="#A9784A"/>
-  <rect x="94" y="876" width="292" height="160" fill="#2E3A35"/>
-  <text x="240" y="914" font-family="${SERIF}" font-size="28" fill="#EDEAE0" text-anchor="middle">오늘의 메뉴</text>
-  ${menu.map((m,i)=>`<text x="240" y="${956+i*32}" font-family="${SANS}" font-size="22" fill="#EDEAE0" fill-opacity=".9" text-anchor="middle">${esc(cut(m,12))}</text>`).join("")}
+  <rect x="94" y="876" width="292" height="160" fill="#22324A"/>
+  <text x="240" y="918" font-family="${PEN}" font-size="40" fill="#EDEAE0" text-anchor="middle">오늘의 메뉴</text>
+  ${menu.map((m,i)=>`<text x="240" y="${960+i*32}" font-family="${PEN}" font-size="31" fill="#EDEAE0" fill-opacity=".92" text-anchor="middle">${esc(cut(m,12))}</text>`).join("")}
 
   <rect x="478" y="196" width="568" height="904" fill="#5B3A29"/>
   <rect x="496" y="214" width="532" height="870" fill="#33251C"/>
@@ -340,6 +351,19 @@ function sceneBody(exp){
 
   <path d="M452 1092 l6 -48 h22 l6 48 z" fill="#B5543C"/>
   <path d="M468 1046 q-30 -50 -8 -90 M470 1046 q4 -60 26 -84 M466 1046 q-12 -40 -40 -52" stroke="#4E7A55" stroke-width="7" fill="none" stroke-linecap="round"/>
+
+  <!-- 의자, 작은 테이블, 아이스 커피 -->
+  <rect x="340" y="1056" width="10" height="240" fill="#7A4A2A"/><rect x="392" y="1070" width="9" height="120" fill="#7A4A2A"/>
+  <rect x="340" y="1060" width="60" height="14" rx="3" fill="#8A5A33"/><rect x="342" y="1104" width="56" height="10" rx="3" fill="#8A5A33"/>
+  <rect x="334" y="1182" width="78" height="14" rx="3" fill="#9B6A3E"/>
+  <rect x="338" y="1196" width="8" height="104" fill="#6B3E22"/><rect x="400" y="1196" width="8" height="104" fill="#6B3E22"/>
+  <ellipse cx="488" cy="1178" rx="76" ry="15" fill="#A8774A"/><rect x="412" y="1178" width="152" height="8" fill="#8A5A33"/><ellipse cx="488" cy="1186" rx="76" ry="15" fill="#8A5A33" opacity=".5"/>
+  <rect x="482" y="1190" width="12" height="100" fill="#5B3A29"/><ellipse cx="488" cy="1292" rx="42" ry="8" fill="#4A2E20"/>
+  <path d="M452 1110 L478 1110 L474 1172 L456 1172 Z" fill="#FFFFFF" fill-opacity=".38" stroke="#E5ECF2" stroke-width="2"/>
+  <path d="M455 1128 L475 1128 L473 1170 L457 1170 Z" fill="#6B3E22"/>
+  <rect x="459" y="1130" width="7" height="7" fill="#FFFFFF" opacity=".55"/><rect x="466" y="1140" width="6" height="6" fill="#FFFFFF" opacity=".5"/>
+  <line x1="468" y1="1096" x2="464" y2="1150" stroke="#E9E2D6" stroke-width="3"/>
+  <rect x="500" y="1158" width="52" height="11" rx="1" fill="#2F4F74" transform="rotate(-4 526 1163)"/>
 
   <!-- 가판대 (reading) -->
   <path d="M580 1116 H1006 L1016 1300 H570 Z" fill="#A9784A"/>
@@ -353,11 +377,11 @@ function sceneBody(exp){
 
 
   <text x="44" y="1236" font-family="${SERIF}" font-weight="700" font-size="34" fill="#F7EEDC">읽은 책 ${nRead}권</text>
-  <text x="44" y="1274" font-family="${SANS}" font-size="21" fill="#F7EEDC" fill-opacity=".88">읽는 중 ${reading.length}권, 살 책 ${wants.length}권</text>
-  <text x="44" y="1306" font-family="${SANS}" font-size="19" fill="#F7EEDC" fill-opacity=".75">${dot(today())}${pg.length > 1 ? `  책장 ${page+1}/${pg.length}` : ""}</text>
-  ${exp ? "" : `<g class="nav" data-nav="out" role="button" aria-label="밖으로 나가기"><rect x="34" y="92" width="190" height="58" rx="29" fill="#2B2622" fill-opacity=".82"/><text x="129" y="130" font-family="${SANS}" font-size="24" fill="#F7EEDC" text-anchor="middle">← 밖으로</text></g>
-  <g class="nav" data-nav="today" role="button" aria-label="오늘의 책으로"><rect x="836" y="160" width="210" height="58" rx="29" fill="#C8912A" fill-opacity=".95"/><text x="941" y="198" font-family="${SANS}" font-size="24" fill="#2B2622" text-anchor="middle">오늘의 책 →</text></g>
-  <g class="nav" data-nav="wall" role="button" aria-label="살 책 벽으로"><rect x="836" y="92" width="210" height="58" rx="29" fill="#2B2622" fill-opacity=".82"/><text x="941" y="130" font-family="${SANS}" font-size="24" fill="#F7EEDC" text-anchor="middle">살 책 벽 →</text></g>`}`;
+  <text x="44" y="1274" font-family="${SANS}" font-size="21" fill="#F7EEDC" fill-opacity=".88">읽는 중 ${reading.length}권, 입고 예정 ${wants.length}권</text>
+  <text x="44" y="1306" font-family="${SANS}" font-size="19" fill="#F7EEDC" fill-opacity=".75">${dot(today())} · ${openLine()}${pg.length > 1 ? `  책장 ${page+1}/${pg.length}` : ""}</text>
+  ${exp ? "" : `<g class="nav" data-nav="out" role="button" aria-label="밖으로 나가기"><rect x="34" y="92" width="190" height="58" rx="29" fill="#1C2A3A" fill-opacity=".82"/><text x="129" y="130" font-family="${SANS}" font-size="24" fill="#F7EEDC" text-anchor="middle">← 밖으로</text></g>
+  <g class="nav" data-nav="today" role="button" aria-label="추천 책으로"><rect x="836" y="160" width="210" height="58" rx="29" fill="#C8912A" fill-opacity=".95"/><text x="941" y="198" font-family="${SANS}" font-size="22" fill="#1C2A3A" text-anchor="middle">${esc(cut(recName(), 7))} →</text></g>
+  <g class="nav" data-nav="wall" role="button" aria-label="입고 예정으로"><rect x="836" y="92" width="210" height="58" rx="29" fill="#1C2A3A" fill-opacity=".82"/><text x="941" y="130" font-family="${SANS}" font-size="24" fill="#F7EEDC" text-anchor="middle">입고 예정 →</text></g>`}`;
 }
 
 /* ---------- facade ---------- */
@@ -388,7 +412,8 @@ function facadeBody(exp){
   <ellipse cx="800" cy="215" rx="330" ry="140" fill="url(#fSignGlow)"/>
   <rect x="560" y="150" width="480" height="130" rx="16" fill="#D9DCE0"/>
   <rect x="576" y="166" width="448" height="98" rx="8" fill="#FFF3C9"/>
-  <text x="800" y="236" font-family="${SERIF}" font-weight="700" font-size="58" fill="#3A2F25" text-anchor="middle">${esc(data.shopName)}</text>
+  <text x="800" y="236" font-family="${SERIF}" font-weight="800" font-size="56" fill="#3A2F25" text-anchor="middle">${esc(data.shopName)}</text>
+  <text x="800" y="314" font-family="${SANS}" font-size="22" fill="#D9DCE0" text-anchor="middle">since ${openDot()}</text>
 
   <rect x="36" y="330" width="1008" height="856" fill="#DADDE0"/>
   <rect x="60" y="352" width="560" height="810" fill="url(#fWarm)"/>
@@ -408,8 +433,8 @@ function facadeBody(exp){
 
   <g class="nav" data-nav="in" role="button" aria-label="문을 열고 들어가기">
     <rect x="644" y="352" width="376" height="70" fill="url(#fWarm)"/>
-    <rect x="656" y="432" width="352" height="732" fill="#2F6B5E"/>
-    <rect x="700" y="476" width="264" height="300" fill="#245549"/>
+    <rect x="656" y="432" width="352" height="732" fill="#2F6FA8"/>
+    <rect x="700" y="476" width="264" height="300" fill="#235A8C"/>
     <rect x="712" y="488" width="240" height="276" fill="url(#fWarm)"/>
     <rect x="810" y="560" width="142" height="10" fill="#E8E2D6"/><rect x="810" y="650" width="142" height="10" fill="#E8E2D6"/><rect x="810" y="740" width="142" height="10" fill="#E8E2D6"/>
     ${doorSpines.replace(/y="(\d+)"/g, (m, v) => `y="${v}"`)}
@@ -417,8 +442,8 @@ function facadeBody(exp){
     <rect x="712" y="488" width="240" height="276" fill="url(#fGlass)"/>
     <rect x="806" y="800" width="64" height="14" rx="3" fill="#C9CCCF"/>
     <circle cx="690" cy="830" r="11" fill="#E2E4E6"/>
-    <rect x="700" y="850" width="118" height="270" fill="none" stroke="#245549" stroke-width="8"/>
-    <rect x="846" y="850" width="118" height="270" fill="none" stroke="#245549" stroke-width="8"/>
+    <rect x="700" y="850" width="118" height="270" fill="none" stroke="#235A8C" stroke-width="8"/>
+    <rect x="846" y="850" width="118" height="270" fill="none" stroke="#235A8C" stroke-width="8"/>
   </g>
   <rect x="620" y="352" width="24" height="810" fill="#DADDE0"/>
 
@@ -468,20 +493,23 @@ function wallBody(exp){
   <rect width="${W}" height="${H}" fill="url(#wWall)"/>
   <rect y="1232" width="${W}" height="118" fill="#CDB693"/><rect y="1222" width="${W}" height="12" fill="#DAD6CD"/>
   <g transform="rotate(-3 200 560)">
-    <rect x="70" y="420" width="260" height="280" fill="#E9A9B4"/>
-    <rect x="58" y="408" width="70" height="24" fill="#F6D3DA" opacity=".85" transform="rotate(-20 93 420)"/>
-    <rect x="276" y="408" width="70" height="24" fill="#F6D3DA" opacity=".85" transform="rotate(18 311 420)"/>
-    <text x="200" y="545" font-family="${SERIF}" font-weight="700" font-size="44" fill="#2B2622" text-anchor="middle">곧 들일 책</text>
-    <text x="200" y="608" font-family="${SANS}" font-size="30" fill="#2B2622" text-anchor="middle">${total}권</text>
+    <rect x="70" y="420" width="260" height="280" fill="#A9C8E8"/>
+    <rect x="58" y="408" width="70" height="24" fill="#D6E6F5" opacity=".85" transform="rotate(-20 93 420)"/>
+    <rect x="276" y="408" width="70" height="24" fill="#D6E6F5" opacity=".85" transform="rotate(18 311 420)"/>
+    <text x="200" y="545" font-family="${SERIF}" font-weight="700" font-size="44" fill="#1C2A3A" text-anchor="middle">입고 예정</text>
+    <text x="200" y="608" font-family="${SANS}" font-size="30" fill="#1C2A3A" text-anchor="middle">${total}권</text>
   </g>
   ${[0, 1, 2].map(i => `<rect x="${130 + i * 46}" y="712" width="30" height="96" fill="#FFFFFF" transform="rotate(${i - 1} ${145 + i * 46} 712)"/><text x="${145 + i * 46}" y="790" font-family="${SANS}" font-size="16" fill="#6B7F3A" text-anchor="middle" transform="rotate(${i - 1} ${145 + i * 46} 712)">♣</text>`).join("")}
-  ${items.length ? items.map(wallCoverSvg).join("") : `<text x="715" y="560" font-family="${SANS}" font-size="28" fill="#8A8578" text-anchor="middle">살 책을 담으면</text><text x="715" y="604" font-family="${SANS}" font-size="28" fill="#8A8578" text-anchor="middle">이 벽에 진열돼요</text>`}
+  ${items.length ? items.map(wallCoverSvg).join("") : `<text x="715" y="560" font-family="${SANS}" font-size="28" fill="#8A8578" text-anchor="middle">입고 예정 책을 담으면</text><text x="715" y="604" font-family="${SANS}" font-size="28" fill="#8A8578" text-anchor="middle">이 벽에 진열돼요</text>`}
   ${racks.join("")}
   ${pagesN > 1 ? `<text x="200" y="880" font-family="${SANS}" font-size="24" fill="#6E6A60" text-anchor="middle">${wallPage + 1} / ${pagesN}</text>` : ""}
-  ${exp ? "" : `<g class="nav" data-nav="in" role="button" aria-label="책방으로 돌아가기"><rect x="40" y="1252" width="230" height="62" rx="31" fill="#2B2622"/><text x="155" y="1292" font-family="${SANS}" font-size="25" fill="#F7EEDC" text-anchor="middle">← 책방으로</text></g>`}`;
+  ${exp ? "" : `<g class="nav" data-nav="in" role="button" aria-label="책방으로 돌아가기"><rect x="40" y="1252" width="230" height="62" rx="31" fill="#1C2A3A"/><text x="155" y="1292" font-family="${SANS}" font-size="25" fill="#F7EEDC" text-anchor="middle">← 책방으로</text></g>`}`;
 }
 /* ---------- today's picks ---------- */
-const todayBooks = () => data.today.ids.map(id => data.books.find(b => b.id === id)).filter(Boolean);
+const todayBooks = () => {
+  const picked = data.today.ids.map(id => data.books.find(b => b.id === id)).filter(b => b && b.status !== "hidden");
+  return picked.length ? picked : readingBooks().slice(0, 5);   // 고른 책이 없으면 지금 읽는 책
+};
 function todayItems(){
   const bs = todayBooks(), n = bs.length;
   if (!n) return [];
@@ -512,22 +540,22 @@ function todayBody(exp){
   const shadows = items.map(it => `<ellipse cx="${it.x + it.w/2}" cy="${it.y + it.h + 4}" rx="${it.w * 0.55}" ry="10" fill="#000" opacity=".22"/>
     <path d="M${it.x + it.w*0.2} ${it.y + it.h} L${it.x + it.w*0.5} ${it.y + it.h*0.35} L${it.x + it.w*0.8} ${it.y + it.h} Z" fill="#5B3A29"/>`).join("");
   return `
-  <defs><linearGradient id="tWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#EEE6D4"/><stop offset="1" stop-color="#D5C8AE"/></linearGradient></defs>
+  <defs><linearGradient id="tWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E4EAF1"/><stop offset="1" stop-color="#C6D1DE"/></linearGradient></defs>
   <rect width="${W}" height="${H}" fill="url(#tWall)"/>
-  ${[220, 540, 860].map(x => `<rect x="${x - 3}" y="0" width="6" height="${LY}" fill="#3E4A44"/><path d="M${x - 40} ${LY} L${x - 22} ${LY - 24} H${x + 22} L${x + 40} ${LY} Z" fill="#2E3A35"/>`).join("")}
+  ${[220, 540, 860].map(x => `<rect x="${x - 3}" y="0" width="6" height="${LY}" fill="#3E4A44"/><path d="M${x - 40} ${LY} L${x - 22} ${LY - 24} H${x + 22} L${x + 40} ${LY} Z" fill="#22324A"/>`).join("")}
   ${lights}
   <rect x="200" y="${SY}" width="680" height="190" rx="8" fill="#A9784A"/>
-  <rect x="214" y="${SY + 14}" width="652" height="162" fill="#2E3A35"/>
-  <text x="540" y="${SY + 110}" font-family="${SERIF}" font-weight="700" font-size="54" fill="#F3EEDF" text-anchor="middle">${esc(cut(data.today.label, 14))}</text>
+  <rect x="214" y="${SY + 14}" width="652" height="162" fill="#22324A"/>
+  <text x="540" y="${SY + 110}" font-family="${SERIF}" font-weight="700" font-size="54" fill="#F3EEDF" text-anchor="middle">${esc(cut(todayLabel(), 16))}</text>
   <text x="540" y="${SY + 156}" font-family="${SANS}" font-size="24" fill="#F3EEDF" fill-opacity=".7" text-anchor="middle">${esc(data.shopName)}, ${dot(today())}</text>
   ${two ? `<rect x="150" y="660" width="780" height="22" fill="#A9784A"/><rect x="170" y="682" width="16" height="378" fill="#7F5434"/><rect x="894" y="682" width="16" height="378" fill="#7F5434"/>` : ""}
   <rect x="70" y="1060" width="940" height="30" fill="#A9784A"/>
   <rect x="90" y="1090" width="900" height="200" fill="#8A5E3E"/>
   <rect x="90" y="1090" width="900" height="8" fill="#000" opacity=".15"/>
   ${shadows}
-  ${items.length ? items.map(bigCoverSvg).join("") : `<text x="540" y="800" font-family="${SANS}" font-size="30" fill="#6E6152" text-anchor="middle">오늘의 책을 골라 진열해 보세요</text>`}
-  ${exp ? "" : `<g class="nav" data-nav="in" role="button" aria-label="책방으로 돌아가기"><rect x="40" y="1252" width="230" height="62" rx="31" fill="#2B2622"/><text x="155" y="1292" font-family="${SANS}" font-size="25" fill="#F7EEDC" text-anchor="middle">← 책방으로</text></g>
-  <g class="nav" data-nav="pick" role="button" aria-label="오늘의 책 고르기"><rect x="770" y="1252" width="270" height="62" rx="31" fill="#C8912A"/><text x="905" y="1292" font-family="${SANS}" font-size="25" fill="#2B2622" text-anchor="middle">${items.length ? "책 다시 고르기" : "책 고르기"}</text></g>`}`;
+  ${items.length ? items.map(bigCoverSvg).join("") : `<text x="540" y="800" font-family="${SANS}" font-size="30" fill="#6E6152" text-anchor="middle">지금 읽는 책이나 추천할 책을 골라 보세요</text>`}
+  ${exp ? "" : `<g class="nav" data-nav="in" role="button" aria-label="책방으로 돌아가기"><rect x="40" y="1252" width="230" height="62" rx="31" fill="#1C2A3A"/><text x="155" y="1292" font-family="${SANS}" font-size="25" fill="#F7EEDC" text-anchor="middle">← 책방으로</text></g>
+  <g class="nav" data-nav="pick" role="button" aria-label="추천 책 고르기"><rect x="770" y="1252" width="270" height="62" rx="31" fill="#C8912A"/><text x="905" y="1292" font-family="${SANS}" font-size="25" fill="#1C2A3A" text-anchor="middle">${items.length ? "책 다시 고르기" : "책 고르기"}</text></g>`}`;
 }
 const viewBody = (v, exp) => v === "out" ? facadeBody(exp) : v === "wall" ? wallBody(exp) : v === "today" ? todayBody(exp) : sceneBody(exp);
 
@@ -549,7 +577,7 @@ function listCardSvg(books, pIdx, pTotal){
   return `<rect width="${W}" height="${H}" fill="#EFEADF"/>
     <rect width="${W}" height="100" fill="#33251C"/>${bandSvg}<rect y="92" width="${W}" height="10" fill="#6B4632"/>
     <text x="84" y="178" font-family="${SANS}" font-size="26" fill="#5E6B66">${esc(data.shopName)}</text>
-    <text x="84" y="250" font-family="${SERIF}" font-weight="700" font-size="66" fill="#22302C">살 책 목록</text>
+    <text x="84" y="250" font-family="${SERIF}" font-weight="700" font-size="66" fill="#22302C">입고 예정 목록</text>
     <text x="996" y="250" font-family="${SANS}" font-size="24" fill="#5E6B66" text-anchor="end">${dot(today())}</text>
     <line x1="84" y1="282" x2="996" y2="282" stroke="#5B3A29" stroke-width="3"/>
     ${rows}
@@ -565,7 +593,7 @@ function renderScene(){
   svg.classList.toggle("picking", !!selectedId);
   const n = view === "in" ? pages().length : view === "wall" ? wallItems().pagesN : 1;
   $("#pager").hidden = n < 2;
-  $("#pageInfo").textContent = view === "in" ? `책장 ${page+1} / ${n}` : `살 책 벽 ${wallPage+1} / ${n}`;
+  $("#pageInfo").textContent = view === "in" ? `책장 ${page+1} / ${n}` : `입고 예정 ${wallPage+1} / ${n}`;
   document.querySelectorAll(".views button").forEach(b => b.setAttribute("aria-selected", b.dataset.view === view));
   justAdded.clear();
 }
@@ -589,7 +617,7 @@ function renderDetail(){
   if (!b) { box.hidden = true; box.innerHTML = ""; return; }
   box.hidden = false;
   const meta = b.status === "read" ? (b.readDate ? `${dot(b.readDate)}에 다 읽음` : "읽은 책")
-             : b.status === "reading" ? (b.startDate ? `${dot(b.startDate)}부터 읽는 중` : "읽는 중") : "살 책";
+             : b.status === "reading" ? (b.startDate ? `${dot(b.startDate)}부터 읽는 중` : "읽는 중") : "입고 예정";
   const acts = b.status === "read"
     ? `<button class="btn primary" data-act="back">다시 꽂기</button><button class="btn" data-act="edit">수정</button><button class="btn danger" data-act="remove">책장에서 빼기</button>`
     : b.status === "reading"
@@ -630,7 +658,7 @@ function renderList(){
   const sets = { read: readBooks().reverse(), reading: readingBooks(), want: wantBooks() };
   $("#tabRead").textContent = `읽은 책 ${sets.read.length}`;
   $("#tabReading").textContent = `읽는 중 ${sets.reading.length}`;
-  $("#tabWant").textContent = `살 책 ${sets.want.length}`;
+  $("#tabWant").textContent = `입고 예정 ${sets.want.length}`;
   document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.tab === listTab));
   const arr = sets[listTab];
   const emptyText = { read: "읽은 책을 추가하면 책장에 꽂혀요.", reading: "읽고 있는 책은 가판대에 올라가요.", want: "사고 싶은 책을 담으면 책장 맨 아래 칸에 꽂혀요." }[listTab];
@@ -640,6 +668,9 @@ function renderList(){
   }).join("") : `<li class="empty">${emptyText}</li>`;
 }
 function renderAll(){
+  $("#viewTodayBtn").textContent = recName() + " 책";
+  $("#sinceText").textContent = `since ${openDot()} · ${openLine()}`;
+  if (document.activeElement !== $("#openDate")) $("#openDate").value = data.openDate || OPEN_DEFAULT;
   $("#title").textContent = data.shopName; document.title = data.shopName;
   if (document.activeElement !== $("#shopName")) $("#shopName").value = data.shopName;
   if (document.activeElement !== $("#breads")) $("#breads").value = data.menu;
@@ -976,7 +1007,7 @@ function setFormStatus(s){
   $("#dateField").style.visibility = s === "want" ? "hidden" : "visible";
   $("#dateLabel").textContent = s === "reading" ? "읽기 시작한 날" : "다 읽은 날";
   $("#memoLabel").textContent = s === "want" ? "메모 (어디서 살지, 누가 추천했는지 등)" : "한 줄 메모";
-  $("#saveBtn").textContent = editingId ? "수정 저장" : { read: "책장에 꽂기", reading: "가판대에 올리기", want: "살 책에 담기" }[s];
+  $("#saveBtn").textContent = editingId ? "수정 저장" : { read: "책장에 꽂기", reading: "가판대에 올리기", want: "입고 예정에 담기" }[s];
 }
 function resetForm(){
   editingId = null; pendingCover = null; showCoverPreview(""); $("#sugg").hidden = true; clearTimeout(findTimer); ["#fTitle","#fAuthor","#fMemo"].forEach(s => $(s).value = ""); $("#fDate").value = today();
@@ -1013,7 +1044,7 @@ async function saveForm(){
     const b = { id: uid(), addedAt: Date.now(), ...fields };
     await applyCover(b);
     data.books.push(b); justAdded.add(b.id); focusBook(b); selectedId = null; listTab = b.status;
-    toast({ read: "책장에 꽂았어요", reading: "가판대에 올렸어요", want: "살 책에 담았어요" }[b.status]);
+    toast({ read: "책장에 꽂았어요", reading: "가판대에 올렸어요", want: "입고 예정에 담았어요" }[b.status]);
   }
   btn.disabled = false; btn.textContent = label; saving = false;
   persist(); resetForm(); renderAll();
@@ -1100,25 +1131,25 @@ $("#saveFilesBtn").addEventListener("click", () => {
 });
 const baseName = () => data.shopName.replace(/[\\/:*?"<>|]/g, "") + "_" + today().replaceAll("-", "");
 $("#exportBtn").addEventListener("click", async () => {
-  try { const blob = await svgToPng(viewBody(view, true)); await deliver([{ name: `${baseName()}_${{out:"밖에서",in:"책방안",today:"오늘의책",wall:"살책벽"}[view]}.png`, blob }]); }
+  try { const blob = await svgToPng(viewBody(view, true)); await deliver([{ name: `${baseName()}_${{out:"밖에서",in:"책방안",today:"추천책",wall:"입고예정"}[view]}.png`, blob }]); }
   catch { toast("이미지를 만들지 못했어요"); }
 });
 $("#carouselBtn").addEventListener("click", async () => {
   try {
     const files = [];
-    const seq = [["out", "밖에서"], ["in", "책방안"]].concat(todayBooks().length ? [["today", "오늘의책"]] : [], [["wall", "살책벽"]]);
+    const seq = [["out", "밖에서"], ["in", "책방안"]].concat(todayBooks().length ? [["today", "추천책"]] : [], [["wall", "입고예정"]]);
     for (const [i, [v, nm]] of seq.entries()) files.push({ name: `${baseName()}_${i + 1}_${nm}.png`, blob: await svgToPng(viewBody(v, true)) });
     await deliver(files);
   } catch { toast("이미지를 만들지 못했어요"); }
 });
 $("#exportListBtn").addEventListener("click", async () => {
   const wants = wantBooks();
-  if (!wants.length) { toast("살 책을 먼저 담아주세요"); return; }
+  if (!wants.length) { toast("입고 예정 책을 먼저 담아주세요"); return; }
   const total = Math.ceil(wants.length / LIST_PER_PAGE), files = [];
   try {
     for (let p = 0; p < total; p++) {
       const blob = await svgToPng(listCardSvg(wants.slice(p * LIST_PER_PAGE, (p + 1) * LIST_PER_PAGE), p, total));
-      files.push({ name: `${baseName()}_살책목록${total > 1 ? "_" + (p + 1) : ""}.png`, blob });
+      files.push({ name: `${baseName()}_입고예정목록${total > 1 ? "_" + (p + 1) : ""}.png`, blob });
     }
     await deliver(files);
   } catch { toast("이미지를 만들지 못했어요"); }
@@ -1242,9 +1273,9 @@ function drawView(ctx, v, now, live){
 }
 function drawFrame(now){
   const ctx = rec.ctx, el = now - rec.t0;
-  ctx.fillStyle = "#2B211B"; ctx.fillRect(0, 0, VW, VH);
+  ctx.fillStyle = "#14202E"; ctx.fillRect(0, 0, VW, VH);
   ctx.textAlign = "center"; ctx.fillStyle = "#F3E6C8"; ctx.font = `700 60px ${SERIF}`; ctx.fillText(data.shopName, VW / 2, 108);
-  const sub = rec.view === "today" && !rec.trans ? data.today.label : dot(today());
+  const sub = rec.view === "today" && !rec.trans ? todayLabel() : `since ${openDot()}`;
   ctx.font = `26px ${SANS}`; ctx.fillStyle = "rgba(243,230,200,.6)"; ctx.fillText(sub, VW / 2, 156);
 
   ctx.save(); ctx.beginPath(); ctx.rect(0, VTOP, VW, H); ctx.clip(); ctx.translate(0, VTOP);
@@ -1257,8 +1288,8 @@ function drawFrame(now){
   } else drawView(ctx, rec.view, now, true);
   ctx.restore();
 
-  ctx.fillStyle = "#33281F"; ctx.fillRect(0, PANEL, VW, VH - PANEL);
-  ctx.fillStyle = "#C8912A"; ctx.fillRect(0, PANEL, VW, 4);
+  ctx.fillStyle = "#1B2A3C"; ctx.fillRect(0, PANEL, VW, VH - PANEL);
+  ctx.fillStyle = "#4A8BC2"; ctx.fillRect(0, PANEL, VW, 4);
   if (rec.out) rec.panel = { id: rec.out, closing: null };
   else if (rec.panel && !rec.panel.closing) rec.panel.closing = now;
   if (rec.panel && rec.panel.closing && now - rec.panel.closing > ANIM) rec.panel = null;
@@ -1276,7 +1307,7 @@ function drawFrame(now){
     if (lines.length > 3) { fs = 38; ctx.font = `700 ${fs}px ${SERIF}`; lines = wrapText(ctx, shown.title, maxW, 3); }
     let y = PANEL + 36 + fs;
     lines.forEach(l => { ctx.fillText(l, tx0, y); y += fs * 1.22; });
-    const meta = shown.status === "read" ? (shown.readDate ? `${dot(shown.readDate)} 다 읽음` : "읽은 책") : shown.status === "reading" ? "지금 읽는 중" : "살 책";
+    const meta = shown.status === "read" ? (shown.readDate ? `${dot(shown.readDate)} 다 읽음` : "읽은 책") : shown.status === "reading" ? "지금 읽는 중" : "입고 예정";
     ctx.font = `30px ${SANS}`; ctx.fillStyle = "rgba(243,230,200,.75)";
     y += 6; ctx.fillText(wrapText(ctx, [shown.author, meta].filter(Boolean).join(", "), maxW, 1)[0] || "", tx0, y);
     if (shown.memo) { ctx.font = `30px ${SERIF}`; ctx.fillStyle = "#EADFC6";
@@ -1284,14 +1315,14 @@ function drawFrame(now){
       wrapText(ctx, shown.memo, maxW, Math.min(3, room)).forEach((l, i) => ctx.fillText(l, tx0, y + 52 + i * 42)); }
     ctx.restore();
   } else {
-    const txt = rec.view === "out" && !rec.trans ? "문을 열고 들어가 볼까요" : rec.view === "wall" ? `곧 들일 책 ${wantBooks().length}권` : rec.view === "today" ? `${data.today.label} ${todayBooks().length}권`
-      : `읽은 책 ${readBooks().length}권, 읽는 중 ${readingBooks().length}권, 살 책 ${wantBooks().length}권`;
+    const txt = rec.view === "out" && !rec.trans ? "문을 열고 들어가 볼까요" : rec.view === "wall" ? `입고 예정 ${wantBooks().length}권` : rec.view === "today" ? `${todayLabel()} ${todayBooks().length}권`
+      : `읽은 책 ${readBooks().length}권, 읽는 중 ${readingBooks().length}권, 입고 예정 ${wantBooks().length}권`;
     ctx.textAlign = "center"; ctx.fillStyle = "rgba(243,230,200,.8)"; ctx.font = `34px ${SERIF}`; ctx.fillText(txt, VW / 2, PANEL + 200);
   }
-  if (el < 350) { ctx.fillStyle = `rgba(43,33,27,${1 - el / 350})`; ctx.fillRect(0, 0, VW, VH); }
+  if (el < 350) { ctx.fillStyle = `rgba(20,32,46,${1 - el / 350})`; ctx.fillRect(0, 0, VW, VH); }
   if (el > rec.dur - OUTRO) {
     const a = Math.min(1, (el - (rec.dur - OUTRO)) / (OUTRO * 0.8));
-    ctx.fillStyle = `rgba(43,33,27,${0.93 * a})`; ctx.fillRect(0, 0, VW, VH);
+    ctx.fillStyle = `rgba(20,32,46,${0.93 * a})`; ctx.fillRect(0, 0, VW, VH);
     ctx.globalAlpha = a; ctx.textAlign = "center"; ctx.fillStyle = "#F3E6C8"; ctx.font = `700 80px ${SERIF}`; ctx.fillText(data.shopName, VW / 2, VH / 2);
     ctx.font = `30px ${SANS}`; ctx.fillStyle = "rgba(243,230,200,.75)"; ctx.fillText(`읽은 책 ${readBooks().length}권`, VW / 2, VH / 2 + 70); ctx.globalAlpha = 1;
   }
@@ -1368,7 +1399,7 @@ $("#autoVidBtn").addEventListener("click", () => openPicker("video"));
 let pickIds = [], pickMode = "scene";
 function renderPicker(){
   const q = $("#pickFilter").value.trim().toLowerCase();
-  const order = { reading: 0, read: 1, want: 2 }, lab = { reading: "읽는 중", read: "읽은 책", want: "살 책" };
+  const order = { reading: 0, read: 1, want: 2 }, lab = { reading: "읽는 중", read: "읽은 책", want: "입고 예정" };
   const arr = data.books.filter(b => b.status !== "hidden").sort((a, b) => (pickIds.includes(b.id) - pickIds.includes(a.id)) || order[a.status] - order[b.status] || (b.addedAt - a.addedAt))
     .filter(b => !q || b.title.toLowerCase().includes(q) || (b.author || "").toLowerCase().includes(q));
   $("#pickList").innerHTML = arr.length ? arr.map(b => { const n = pickIds.indexOf(b.id), src = coverSrc(b);
@@ -1384,8 +1415,10 @@ function renderPicker(){
 function openPicker(mode){
   if (rec) return;
   pickMode = mode; pickIds = todayBooks().map(b => b.id);
-  $("#pickLabel").value = data.today.label; $("#pickFilter").value = "";
-  $("#pickOk").textContent = mode === "video" ? "이 책들로 영상 만들기" : "오늘의 책으로 진열";
+  $("#pickL1").dataset.label = $("#pickL1").textContent = recLabel();
+  $("#pickL2").dataset.label = $("#pickL2").textContent = "지금 읽고 있는 책";
+  $("#pickLabel").value = todayLabel(); $("#pickFilter").value = "";
+  $("#pickOk").textContent = mode === "video" ? "이 책들로 영상 만들기" : "추천 책으로 진열";
   $("#pickSkip").hidden = mode !== "video";
   $("#pickModal").hidden = false; renderPicker();
 }
@@ -1401,7 +1434,7 @@ $("#pickFilter").addEventListener("input", renderPicker);
 $("#pickCancel").addEventListener("click", () => { $("#pickModal").hidden = true; });
 $("#pickModal").addEventListener("click", e => { if (e.target.id === "pickModal") e.currentTarget.hidden = true; });
 $("#pickOk").addEventListener("click", () => {
-  data.today = { label: $("#pickLabel").value.trim() || TODAY_DEFAULT.label, ids: pickIds.slice() };
+  data.today = { label: $("#pickLabel").value.trim() === recLabel() ? "" : $("#pickLabel").value.trim(), ids: pickIds.slice() };
   persist(); $("#pickModal").hidden = true;
   if (pickMode === "video") makeVideo(true, true);
   else { selectedId = null; view = "today"; renderAll(); }
@@ -1448,6 +1481,7 @@ function turn(d){ if (rec) return;
 $("#prev").addEventListener("click", () => turn(-1));
 $("#next").addEventListener("click", () => turn(1));
 document.querySelectorAll(".views button").forEach(b => b.addEventListener("click", () => goView(b.dataset.view)));
+$("#openDate").addEventListener("change", e => { if (/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) { data.openDate = e.target.value; renderAll(); persist(); } });
 let nameT; $("#shopName").addEventListener("input", e => { data.shopName = e.target.value.trim() || "작은책방"; $("#title").textContent = data.shopName; clearTimeout(nameT); nameT = setTimeout(() => { renderScene(); persist(); }, 250); });
 let menuT; $("#breads").addEventListener("input", e => { data.menu = e.target.value; clearTimeout(menuT); menuT = setTimeout(() => { renderScene(); persist(); }, 250); });
 $("#closeModal").addEventListener("click", () => { $("#imgModal").hidden = true; });
