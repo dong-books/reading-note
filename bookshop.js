@@ -254,9 +254,14 @@ function wallTexture(){
 }
 function stainedGlass(){ // 나무 창틀 + 창밖 나무 (이름은 예전 그대로)
   const leaves = [[96,300,66,"#7FA36B"],[176,256,74,"#6B9460"],[300,276,86,"#86AE73"],[386,350,66,"#5F8A57"],[118,430,78,"#739C64"],[262,420,92,"#678F5C"],[362,482,70,"#7FA36B"],[196,524,62,"#5F8A57"]];
+  const p = dayPhase(), k = wxKind();
+  const SKY = { night: ["#0E1A31", "#24365A"], dawn: ["#F4C6A8", "#F6E6D2"], morning: ["#C9E3F6", "#FFF2D4"], day: ["#B9D9F2", "#EEF5F9"], dusk: ["#F2A877", "#7C6FA0"] };
+  let sky = SKY[p];
+  if (k === "cloud" || k === "rain" || k === "storm" || k === "fog" || k === "snow") sky = p === "night" ? ["#151D2B", "#2A3446"] : ["#A9B5C2", "#D6DCE2"];
+  const leafDim = p === "night" ? .45 : p === "dusk" || p === "dawn" ? .75 : 1;
   const vine = Array.from({ length: 9 }, (_, i) => `<ellipse cx="${80 + i * 38 + (i % 2) * 6}" cy="${240 + (i % 3) * 14}" rx="12" ry="7" fill="#4F7F4A" transform="rotate(${(i % 2 ? 30 : -25)} ${80 + i * 38} ${240 + (i % 3) * 14})"/>`).join("");
   return `
-  <defs><linearGradient id="winSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D8E8F4"/><stop offset="1" stop-color="#F1F0E6"/></linearGradient></defs>
+  <defs><linearGradient id="winSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky[0]}"/><stop offset="1" stop-color="${sky[1]}"/></linearGradient></defs>
   <rect x="44" y="214" width="382" height="352" fill="#A4703F"/>
   <rect x="58" y="228" width="354" height="324" fill="url(#winSky)"/>
   <clipPath id="winClip"><rect x="58" y="228" width="354" height="324"/></clipPath>
@@ -264,6 +269,11 @@ function stainedGlass(){ // 나무 창틀 + 창밖 나무 (이름은 예전 그�
   <rect x="226" y="380" width="14" height="172" fill="#7B6A52"/>
   ${leaves.map(([x, y, r, c]) => `<circle cx="${x}" cy="${y + 40}" r="${Math.round(r * 0.82)}" fill="${c}" opacity=".9"/>`).join("")}
   ${vine}
+  ${p === "night" ? `<rect x="58" y="228" width="354" height="324" fill="#0B1424" opacity="${(1 - leafDim).toFixed(2)}"/>` : leafDim < 1 ? `<rect x="58" y="228" width="354" height="324" fill="#5A3A50" opacity=".18"/>` : ""}
+  ${p === "night" && k === "clear" ? `<circle cx="360" cy="262" r="16" fill="#F6F0D2"/><circle cx="366" cy="257" r="14" fill="#0E1A31"/>${[[90, 250], [150, 280], [300, 246], [250, 300]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.8" fill="#FFFFFF"/>`).join("")}` : ""}
+  ${(p === "morning" || p === "dawn") && k === "clear" ? `<circle cx="104" cy="266" r="34" fill="#FFF4C8" opacity=".9"/><circle cx="104" cy="266" r="70" fill="#FFF4C8" opacity=".25"/>` : ""}
+  ${k === "fog" ? `<rect x="58" y="228" width="354" height="324" fill="#EEF2F5" opacity=".55"/>` : ""}
+  ${fallSvg(k, 58, 228, 354, 324, "win")}
   </g>
   <rect x="58" y="228" width="354" height="324" fill="url(#glassShine)"/>
   <rect x="58" y="228" width="177" height="324" fill="none" stroke="#F2F0EA" stroke-width="12"/>
@@ -274,6 +284,15 @@ function stainedGlass(){ // 나무 창틀 + 창밖 나무 (이름은 예전 그�
   <ellipse cx="230" cy="812" rx="150" ry="10" fill="#FFE7A8" opacity=".25"/>`;
 }
 
+function interiorLight(){
+  const p = dayPhase(), k = wxKind();
+  if ((p === "morning" || p === "dawn" || p === "day") && (k === "clear" || k === "cloud")) {
+    const a = (p === "day" ? .08 : .14) * (k === "clear" ? 1 : .45);
+    return `<g pointer-events="none"><path d="M235 300 L412 300 L800 1350 L380 1350 Z" fill="#FFF2C4" opacity="${a.toFixed(3)}"/><path d="M90 300 L220 300 L520 1350 L220 1350 Z" fill="#FFF2C4" opacity="${(a * .7).toFixed(3)}"/></g>`;
+  }
+  if (p === "night") return `<rect width="${W}" height="${H}" fill="#0B1424" opacity=".16" pointer-events="none"/>`;
+  return "";
+}
 function sceneBody(exp){
   const pg = pages(); page = Math.min(page, pg.length - 1);
   const items = pg[page], wants = wantBooks(), reading = readingBooks(), nRead = readBooks().length;
@@ -316,7 +335,7 @@ function sceneBody(exp){
 
   ${stainedGlass()}
 
-  ${[150,330].map(x=>`<line x1="${x}" y1="56" x2="${x}" y2="168" stroke="#2A2F2C" stroke-width="2"/><ellipse cx="${x}" cy="300" rx="190" ry="240" fill="url(#glow)"/><path d="M${x-34} 200 L${x-14} 166 H${x+14} L${x+34} 200 Z" fill="#C8912A"/><ellipse cx="${x}" cy="202" rx="10" ry="6" fill="#FFF3CC"/>`).join("")}
+  ${[150,330].map(x=>`<line x1="${x}" y1="56" x2="${x}" y2="168" stroke="#2A2F2C" stroke-width="2"/><ellipse cx="${x}" cy="300" rx="190" ry="240" fill="url(#glow)" opacity="${lampsOn() ? 1 : .55}"/><path d="M${x-34} 200 L${x-14} 166 H${x+14} L${x+34} 200 Z" fill="#C8912A"/><ellipse cx="${x}" cy="202" rx="10" ry="6" fill="#FFF3CC"/>`).join("")}
 
   <rect x="300" y="76" width="480" height="100" rx="10" fill="#5B3A29"/>
   <rect x="312" y="88" width="456" height="76" rx="6" fill="none" stroke="#C8912A" stroke-width="2"/>
@@ -352,6 +371,7 @@ function sceneBody(exp){
   <path d="M452 1092 l6 -48 h22 l6 48 z" fill="#B5543C"/>
   <path d="M468 1046 q-30 -50 -8 -90 M470 1046 q4 -60 26 -84 M466 1046 q-12 -40 -40 -52" stroke="#4E7A55" stroke-width="7" fill="none" stroke-linecap="round"/>
 
+  ${interiorLight()}
   <!-- 의자, 작은 테이블, 아이스 커피 -->
   <rect x="340" y="1056" width="10" height="240" fill="#7A4A2A"/><rect x="392" y="1070" width="9" height="120" fill="#7A4A2A"/>
   <rect x="340" y="1060" width="60" height="14" rx="3" fill="#8A5A33"/><rect x="342" y="1104" width="56" height="10" rx="3" fill="#8A5A33"/>
@@ -384,7 +404,93 @@ function sceneBody(exp){
   <g class="nav" data-nav="wall" role="button" aria-label="입고 예정으로"><rect x="836" y="92" width="210" height="58" rx="29" fill="#1C2A3A" fill-opacity=".82"/><text x="941" y="130" font-family="${SANS}" font-size="24" fill="#F7EEDC" text-anchor="middle">입고 예정 →</text></g>`}`;
 }
 
+/* ---------- 시간대 · 날씨 (이천시 호법면) ---------- */
+const WX = { lat: 37.207, lon: 127.437, place: "이천 호법" };
+let wx = null;
+try { wx = JSON.parse(localStorage.getItem("bs_wx_v1") || "null"); } catch { wx = null; }
+const toMin = s => { const m = String(s || "").match(/(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+function wxKind(){
+  const c = wx ? wx.code : 0;
+  if (c >= 95) return "storm";
+  if ((c >= 71 && c <= 77) || c === 85 || c === 86) return "snow";
+  if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return "rain";
+  if (c === 45 || c === 48) return "fog";
+  if (c >= 2) return "cloud";
+  return "clear";
+}
+const WX_LABEL = { clear: "맑음", cloud: "흐림", fog: "안개", rain: "비", snow: "눈", storm: "천둥번개" };
+const wxLabel = () => (wx && wx.code === 1) ? "구름 조금" : (wx && wx.code === 2) ? "구름 많음" : WX_LABEL[wxKind()];
+function dayPhase(){
+  const now = new Date(), m = now.getHours() * 60 + now.getMinutes();
+  const sr = toMin(wx && wx.sunrise) ?? 400, ss = toMin(wx && wx.sunset) ?? 1070;
+  if (m < sr - 25 || m > ss + 35) return "night";
+  if (m < sr + 30) return "dawn";
+  if (m > ss - 50) return "dusk";
+  if (m < 11 * 60) return "morning";
+  return "day";
+}
+const lampsOn = () => { const p = dayPhase(); return p === "night" || p === "dusk" || wxKind() === "storm"; };
+const wxText = () => wx ? `${WX.place} ${wxLabel()} ${wx.temp}°` : "";
+async function fetchWx(){
+  try {
+    const u = `https://api.open-meteo.com/v1/forecast?latitude=${WX.lat}&longitude=${WX.lon}&current=temperature_2m,weather_code&daily=sunrise,sunset&timezone=Asia%2FSeoul&forecast_days=1`;
+    const r = await fetch(u, { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer" });
+    if (!r.ok) throw 0;
+    const j = await r.json();
+    wx = { code: Number(j.current.weather_code) || 0, temp: Math.round(j.current.temperature_2m), sunrise: String(j.daily.sunrise[0]).slice(11, 16), sunset: String(j.daily.sunset[0]).slice(11, 16), at: Date.now() };
+    try { localStorage.setItem("bs_wx_v1", JSON.stringify(wx)); } catch {}
+  } catch {}
+  if (!rec) renderAll();
+}
+let lastPhaseKey = "";
+setInterval(() => {
+  if (rec || document.visibilityState !== "visible") return;
+  if (!wx || Date.now() - wx.at > 30 * 60000) { fetchWx(); return; }
+  const k = dayPhase() + wxKind();
+  if (k !== lastPhaseKey) { lastPhaseKey = k; renderScene(); }
+}, 5 * 60000);
+
+/* 떨어지는 비·눈 (화면에서는 움직이고, 저장 그림에는 멈춘 모습) */
+function fallSvg(kind, x, y, w, h, seed){
+  if (kind !== "rain" && kind !== "storm" && kind !== "snow") return "";
+  const snow = kind === "snow", n = Math.round(w * h / (snow ? 5200 : 2600));
+  let s = "";
+  for (let i = 0; i < n; i++) {
+    const hh = hash(seed + i), px = x + hh % w, py = y - 60 + (hh >> 10) % (h + 60);
+    s += snow ? `<circle cx="${px}" cy="${py}" r="${2 + hh % 4}" fill="#FFFFFF" opacity=".85"/>`
+              : `<line x1="${px}" y1="${py}" x2="${px - 8}" y2="${py + 26}" stroke="#DDE8F4" stroke-width="2" opacity=".55"/>`;
+  }
+  return `<g pointer-events="none"><g class="${snow ? "wx-snow" : "wx-rain"}">${s}<g transform="translate(0 ${-h})">${s}</g></g></g>`;
+}
+
 /* ---------- facade ---------- */
+function facadeFx(){
+  const p = dayPhase(), k = wxKind(), on = lampsOn();
+  const holes = "M60 352 h560 v810 h-560 z M644 352 h376 v70 h-376 z M712 488 h240 v276 h-240 z M560 150 h480 v130 h-480 z";
+  const dark = { night: .62, dusk: .3, dawn: .22, morning: 0, day: 0 }[p] + ({ rain: .12, storm: .22, cloud: .08, fog: .04, snow: .05, clear: 0 }[k]);
+  const tint = p === "dusk" ? "#3A2440" : p === "dawn" ? "#3A2E44" : "#0B1424";
+  let s = "";
+  if ((p === "morning" || p === "dawn") && (k === "clear" || k === "cloud")) {
+    const a = k === "clear" ? 1 : .5;
+    s += `<g pointer-events="none" opacity="${a}"><rect width="${W}" height="${H}" fill="#FFE2A8" opacity=".08"/>
+      ${[[-120, 260], [140, 170], [420, 230], [720, 150]].map(([x, w], i) => `<path d="M${x} 0 h${w} L${x + w + 520} ${H} h-${w + 120} Z" fill="#FFF3D1" opacity="${(.13 - i * .02).toFixed(2)}"/>`).join("")}</g>`;
+  }
+  if (p === "day" && k === "clear") s += `<rect width="${W}" height="${H}" fill="#FFF6DD" opacity=".05" pointer-events="none"/>`;
+  if (dark > 0) s += `<path d="M0 0 H${W} V${H} H0 Z ${holes}" fill-rule="evenodd" fill="${tint}" opacity="${Math.min(.75, dark).toFixed(2)}" pointer-events="none"/>`;
+  if (on) {
+    s += `<g pointer-events="none">${[536, 1060].map(x => `<circle cx="${x}" cy="236" r="70" fill="#FFE6A0" opacity=".18"/><circle cx="${x}" cy="236" r="28" fill="#FFE6A0" opacity=".35"/><path d="M${x - 10} 248 L${x - 90} 520 H${x + 90} L${x + 10} 248 Z" fill="#FFE6A0" opacity=".12"/>`).join("")}
+      <rect x="560" y="150" width="480" height="130" rx="16" fill="#FFE9A8" opacity=".12"/>
+      <rect x="60" y="1192" width="560" height="140" fill="#FFE2A8" opacity=".10"/></g>`;
+  }
+  if (k === "cloud") s += `<rect width="${W}" height="${H}" fill="#8796A8" opacity=".10" pointer-events="none"/>`;
+  if (k === "fog") s += `<rect width="${W}" height="${H}" fill="#E8EDF2" opacity=".38" pointer-events="none"/>`;
+  if (k === "rain" || k === "storm") s += `<g pointer-events="none"><rect y="1192" width="${W}" height="158" fill="#3A4656" opacity=".25"/>${[120, 360, 700, 940].map((x, i) => `<ellipse cx="${x}" cy="${1250 + (i % 2) * 50}" rx="${70 + i * 8}" ry="10" fill="#C9D6E4" opacity=".3"/>`).join("")}</g>`;
+  if (k === "snow") s += `<g pointer-events="none"><rect y="1186" width="${W}" height="30" fill="#FFFFFF" opacity=".85"/><rect x="560" y="142" width="480" height="12" rx="6" fill="#FFFFFF"/><rect x="486" y="984" width="108" height="10" rx="5" fill="#FFFFFF"/></g>`;
+  s += fallSvg(k, 0, 0, W, H, "fx");
+  if (k === "storm" && p !== "day") s += `<path d="M180 0 l-40 120 h30 l-50 140 l110 -170 h-34 l40 -90 z" fill="#FFF7C8" opacity=".55" pointer-events="none"/>`;
+  if (wx) s += `<g pointer-events="none"><rect x="36" y="1250" width="${36 + wxText().length * 21}" height="54" rx="27" fill="#0B1424" opacity=".55"/><text x="58" y="1286" font-family="${SANS}" font-size="25" fill="#FFFFFF">${esc(wxText())}</text></g>`;
+  return s;
+}
 function facadeBody(exp){
   const books = readBooks().slice(-48);
   const fill = i => books.length ? spine(books[i % books.length]).color : PALETTE[i % PALETTE.length];
@@ -414,6 +520,7 @@ function facadeBody(exp){
   <rect x="576" y="166" width="448" height="98" rx="8" fill="#FFF3C9"/>
   <text x="800" y="236" font-family="${SERIF}" font-weight="800" font-size="56" fill="#3A2F25" text-anchor="middle">${esc(data.shopName)}</text>
   <text x="800" y="314" font-family="${SANS}" font-size="22" fill="#D9DCE0" text-anchor="middle">since ${openDot()}</text>
+  ${[536, 1060].map(x => `<rect x="${x - 3}" y="196" width="6" height="22" fill="#1E2226"/><path d="M${x - 14} 218 h28 l-4 34 h-20 z" fill="#2A2E33"/><rect x="${x - 9}" y="224" width="18" height="24" rx="2" fill="${lampsOn() ? "#FFE6A0" : "#8C9196"}"/>`).join("")}
 
   <rect x="36" y="330" width="1008" height="856" fill="#DADDE0"/>
   <rect x="60" y="352" width="560" height="810" fill="url(#fWarm)"/>
@@ -455,6 +562,7 @@ function facadeBody(exp){
     <text x="540" y="1100" font-family="${SERIF}" font-weight="700" font-size="64" fill="#8FB4E8" text-anchor="middle">책</text>
     <text x="540" y="1176" font-family="${SANS}" font-size="18" fill="#F3E6C8" text-anchor="middle">${esc(cut(data.shopName, 6))}</text>
   </g>
+  ${facadeFx()}
   ${exp ? "" : `<g class="nav" data-nav="in"><rect x="690" y="1238" width="300" height="60" rx="30" fill="#000" fill-opacity=".45"/><text x="840" y="1277" font-family="${SANS}" font-size="25" fill="#FFFFFF" text-anchor="middle">문을 눌러 들어가기</text></g>`}`;
 }
 
@@ -669,7 +777,7 @@ function renderList(){
 }
 function renderAll(){
   $("#viewTodayBtn").textContent = recName() + " 책";
-  $("#sinceText").textContent = `since ${openDot()} · ${openLine()}`;
+  $("#sinceText").textContent = `since ${openDot()} · ${openLine()}` + (wx ? ` · ${wxText()}` : "");
   if (document.activeElement !== $("#openDate")) $("#openDate").value = data.openDate || OPEN_DEFAULT;
   $("#title").textContent = data.shopName; document.title = data.shopName;
   if (document.activeElement !== $("#shopName")) $("#shopName").value = data.shopName;
@@ -1492,4 +1600,5 @@ $("#fDate").value = today();
 setFormStatus("read");
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => renderScene());
 boot();
+fetchWx();
 })();

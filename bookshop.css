@@ -159,3 +159,9 @@ ul.list .a{color:var(--muted);font-size:.85rem;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.book,.book.drop{transition:none;animation:none}}
 
 header .since{margin:4px 0 0;color:var(--muted);font-size:.85rem;letter-spacing:.02em}
+
+.wx-rain{animation:wxRain .7s linear infinite}
+.wx-snow{animation:wxSnow 9s linear infinite}
+@keyframes wxRain{from{transform:translateY(0)}to{transform:translateY(160px)}}
+@keyframes wxSnow{from{transform:translateY(0)}to{transform:translateY(240px)}}
+@media (prefers-reduced-motion:reduce){.wx-rain,.wx-snow{animation:none}}
