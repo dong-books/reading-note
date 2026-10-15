@@ -1,0 +1,33 @@
+.notice{background:#DCE8F5;color:#1C2A3A;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:.92rem}
+.notice[hidden]{display:none}
+.scene-box{position:relative}
+.v-hint{margin-top:8px}
+.about p{margin:0;color:var(--muted);font-size:.92rem;line-height:1.7}
+.v-detail{border-left-color:var(--mustard)}
+.v-top{display:flex;gap:16px;align-items:flex-start}
+.v-top .vc{width:104px;aspect-ratio:2/3;flex:none;object-fit:cover;border-radius:3px;box-shadow:0 8px 18px -8px rgba(0,0,0,.5);cursor:pointer;user-select:none;-webkit-user-select:none}
+.v-top .vc.gen,.cover-pop .pc.gen{display:flex;flex-direction:column;justify-content:center;align-items:center;padding:10%;font-family:var(--serif);font-weight:700;text-align:center;line-height:1.35;font-size:.85rem}
+.cover-pop .pc{width:100%;height:100%;object-fit:cover;display:block;border-radius:3px;box-shadow:0 26px 50px -12px rgba(0,0,0,.65)}
+.cover-pop .pc.gen{font-size:clamp(15px,3.8vw,26px)}
+.gen small{display:block;margin-top:.8em;font-family:var(--sans);font-weight:normal;font-size:.7em;opacity:.85}
+.v-info{min-width:0}
+.v-info h2{margin:0 0 4px}
+.v-info .meta{margin:0 0 2px}
+.v-actions{display:flex;align-items:center;gap:10px;margin:14px 0 6px;flex-wrap:wrap}
+.heart{border:0;background:none;padding:2px;width:40px;height:40px;color:var(--ink);cursor:pointer}
+.heart svg{width:32px;height:32px;display:block}
+.heart.pop svg{animation:heartPop .45s cubic-bezier(.2,1.6,.4,1)}
+@keyframes heartPop{0%{transform:scale(.6)}60%{transform:scale(1.25)}100%{transform:scale(1)}}
+.cnt{font-size:.9rem;font-weight:bold}
+.v-cmts{margin:6px 0 10px;max-height:300px;overflow:auto;font-size:.92rem}
+.cmt{padding:7px 0;border-bottom:1px solid var(--line);line-height:1.55;word-break:break-word}
+.cmt b{margin-right:6px}
+.cmt .when{display:block;color:var(--muted);font-size:.75rem;margin-top:2px}
+.cmt.empty{color:var(--muted);border:0}
+.v-write{display:grid;gap:8px}
+.v-write .btn{justify-self:start}
+.hp{position:absolute !important;left:-9999px;width:1px;height:1px;opacity:0}
+.burst{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%) scale(0);font-size:120px;color:#fff;text-shadow:0 6px 24px rgba(224,36,94,.55);pointer-events:none;opacity:0}
+.burst.go{animation:burst .9s ease-out}
+@keyframes burst{0%{transform:translate(-50%,-50%) scale(0);opacity:0}20%{transform:translate(-50%,-50%) scale(1.15);opacity:.95}40%{transform:translate(-50%,-50%) scale(.95)}80%{opacity:.9}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+@media (prefers-reduced-motion:reduce){.heart.pop svg,.burst.go{animation:none}}

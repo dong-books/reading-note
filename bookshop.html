@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Nanum+Gothic:wght@400;700&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="bookshop.css?v=3">
+<link rel="stylesheet" href="bookshop.css?v=4">
 </head>
 <body>
 <div class="wrap">
@@ -126,9 +126,18 @@
         <h2>책방 꾸미기</h2>
         <div class="field"><label for="shopName">간판 이름</label><input id="shopName" maxlength="12"></div>
         <div class="field"><label for="openDate">오픈일</label><input id="openDate" type="date"></div>
+        <div class="pubbox">
+          <h3>방문객 화면</h3>
+          <label class="chk"><input type="checkbox" id="pubOn"> 방문객 화면 열기 (누구나 링크로 볼 수 있어요)</label>
+          <label class="chk"><input type="checkbox" id="pubCovers"> 표지 사진 보이기 <small>출판사 표지는 저작물이라, 직접 찍은 사진일 때만 권해요</small></label>
+          <label class="chk"><input type="checkbox" id="pubMemo"> 한 줄 메모 보이기</label>
+          <label class="chk"><input type="checkbox" id="pubReview"> 댓글은 내가 확인한 뒤 공개</label>
+          <div class="form-actions" style="margin-top:8px"><button class="btn primary" id="pubCopy">방문객 링크 복사</button><a class="btn" id="pubOpen" target="_blank" rel="noopener">열어 보기</a></div>
+          <p class="hint" id="pubHint"></p>
+        </div>
         <div class="field"><label for="breads">오늘의 메뉴 (칠판에 3줄까지)</label><textarea id="breads" rows="3"></textarea></div>
         <div class="status" id="syncStatus">저장 위치 확인 중…</div>
-        <div class="status">책방 버전 1015-3</div>
+        <div class="status">책방 버전 1015-4</div>
       </section>
     </div>
   </div>
@@ -179,6 +188,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="outbox.js?v=14"></script>
-<script src="bookshop.js?v=3"></script>
+<script src="bookshop.js?v=4"></script>
 </body>
 </html>

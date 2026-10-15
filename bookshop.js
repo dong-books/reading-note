@@ -3,6 +3,7 @@
 const W = 1080, H = 1350;
 const SERIF = "'Nanum Myeongjo','Noto Serif KR',serif";
 const SANS = "'Nanum Gothic','Apple SD Gothic Neo','Malgun Gothic',sans-serif";
+const PUBLIC = false;
 const PEN = "'Nanum Pen Script','Nanum Gothic',cursive";
 const PALETTE = ["#7A2E2E","#2F4F6F","#6B7F3A","#C58B2C","#3E5E5A","#8C5A7A","#B5543C","#40424E","#D9CDAE","#5A6E8C","#9A3F4F","#2E5B44","#A86B3C","#E3B85C"];
 const LIGHT = new Set(["#D9CDAE","#E3B85C"]);
@@ -11,7 +12,7 @@ const LIST_PER_PAGE = 11;
 
 const TODAY_DEFAULT = { label: "", ids: [] };
 const OPEN_DEFAULT = "2026-10-13";
-let data = { shopName: "작은책방", menu: "소금빵\n무화과 깜빠뉴\n핸드드립 커피", openDate: OPEN_DEFAULT, books: [], today: { ...TODAY_DEFAULT } };
+let data = { shopName: "작은책방", menu: "소금빵\n무화과 깜빠뉴\n핸드드립 커피", openDate: OPEN_DEFAULT, books: [], today: { ...TODAY_DEFAULT }, pub: { publicOn: false, publicCovers: false, publicMemo: false, commentMode: "open" } };
 const shortName = () => String(data.shopName || "").replace(/\s*책방\s*$/, "").trim() || data.shopName;
 const recName = () => `${shortName()} 추천`;
 const recLabel = () => `${shortName()}에서 추천하는 책`;
@@ -38,7 +39,7 @@ function hash(s){ let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0);
 const SYNC_FIELDS = ["title", "author", "status", "readDate", "startDate", "memo", "color"];
 const snapOf = b => JSON.stringify(SYNC_FIELDS.map(k => b[k] || ""));
 const pickSync = b => { const o = { id: b.id }; SYNC_FIELDS.forEach(k => { o[k] = b[k] || ""; }); return o; };
-const settingsOf = () => JSON.stringify({ shopName: data.shopName, menu: data.menu, openDate: data.openDate, today: data.today });
+const settingsOf = () => JSON.stringify({ shopName: data.shopName, menu: data.menu, openDate: data.openDate, today: data.today, pub: data.pub });
 let lastSynced = new Map(), settingsSynced = "", coverQueue = [], syncTimer = null, syncing = false, syncAgain = false, lastRefresh = 0;
 
 function setStatus(t, warn, withLink){
@@ -64,6 +65,7 @@ function loadThumbsLocal(){ try { return JSON.parse(localStorage.getItem(THUMB_K
 function normalize(d){
   d = JSON.parse(JSON.stringify(d || {}));
   return { shopName: d.shopName || "작은책방", menu: typeof d.menu === "string" ? d.menu : data.menu, openDate: /^\d{4}-\d{2}-\d{2}$/.test(d.openDate || "") ? d.openDate : OPEN_DEFAULT,
+           pub: { publicOn: !!(d.pub && d.pub.publicOn), publicCovers: !!(d.pub && d.pub.publicCovers), publicMemo: !!(d.pub && d.pub.publicMemo), commentMode: d.pub && d.pub.commentMode === "review" ? "review" : "open" },
            books: Array.isArray(d.books) ? d.books.filter(b => b && b.title) : [],
            today: d.today && Array.isArray(d.today.ids) ? { label: String(d.today.label || TODAY_DEFAULT.label), ids: d.today.ids.slice(0, 5) } : { ...TODAY_DEFAULT } };
 }
@@ -130,7 +132,7 @@ async function syncNow(){
     }
     // 4) 간판·메뉴·오늘의 책
     const st = settingsOf();
-    if (settingsSynced && st !== settingsSynced) { await api("shopset", { shopName: data.shopName, menu: data.menu, openDate: data.openDate, today: data.today }); settingsSynced = st; }
+    if (settingsSynced && st !== settingsSynced) { await api("shopset", Object.assign({ shopName: data.shopName, menu: data.menu, openDate: data.openDate, today: data.today }, data.pub)); settingsSynced = st; }
     saveCache();
     setStatus("독서노트 구글 시트에 저장됨");
   } catch (e) {
@@ -143,7 +145,7 @@ async function syncNow(){
 }
 function applyServer(r){
   const keepSel = selectedId;
-  data = normalize({ shopName: r.settings.shopName, menu: r.settings.menu, openDate: r.settings.openDate, today: r.settings.today, books: r.books });
+  data = normalize({ shopName: r.settings.shopName, menu: r.settings.menu, openDate: r.settings.openDate, today: r.settings.today, books: r.books, pub: r.settings });
   lastSynced = new Map(data.books.map(b => [b.id, { s: snapOf(b), title: b.title, author: b.author }]));
   settingsSynced = settingsOf();
   selectedId = data.books.some(b => b.id === keepSel) ? keepSel : null;
@@ -714,6 +716,13 @@ function updatePop(){
     : `<span class="gen" style="background:${c};color:${isLight(c) ? "#2A2420" : "#F5EEDD"}">${esc(b.title)}${b.author ? `<small>${esc(b.author)}</small>` : ""}</span>`;
   el.dataset.id = b.id; el.hidden = false; el.style.animation = "none"; void el.offsetWidth; el.style.animation = "";
 }
+$("#detail").addEventListener("click", async e => {
+  const m = e.target.closest("[data-mod]"); if (!m) return;
+  const b = data.books.find(x => x.id === selectedId); if (!b) return;
+  if (m.dataset.mod === "delete" && !confirm("이 댓글을 지울까요?")) return;
+  try { const r = await api("shopmod", { id: m.dataset.cid, op: m.dataset.mod, title: b.title }); b.comments = r.comments.filter(c => c.status === "공개").length; renderCmtAdmin(b, r); }
+  catch (err) { toast("처리하지 못했어요: " + (err.message || "오류")); }
+});
 $("#detail").addEventListener("change", e => {
   const inp = e.target.closest("input[data-cover-for]"); if (!inp) return;
   const f = inp.files && inp.files[0], id = inp.dataset.coverFor; inp.value = ""; if (f) quickCover(f, id);
@@ -737,7 +746,23 @@ function renderDetail(){
     ${b.memo ? `<blockquote>${esc(b.memo).replace(/\n/g,"<br>")}</blockquote>` : ""}</div></div><div class="actions">${acts}
     <label class="btn filebtn" style="margin:0;color:var(--ink)">${src ? "표지 다시 찍기" : "표지 찍기"}<input type="file" accept="image/*" capture="environment" data-cover-for="${esc(b.id)}"></label>
     <label class="btn filebtn" style="margin:0;color:var(--ink)">${src ? "표지 바꾸기" : "표지 고르기"}<input type="file" accept="image/*" data-cover-for="${esc(b.id)}"></label>
-    ${src ? `<button class="btn" data-act="crop">표지 자르기</button>` : ""}</div>${notesHtml(b)}`;
+    ${src ? `<button class="btn" data-act="crop">표지 자르기</button>` : ""}</div>${notesHtml(b)}${visitorHtml(b)}`;
+}
+function visitorHtml(b){
+  if (!data.pub.publicOn && !b.likes && !b.comments) return "";
+  return `<div class="notes"><div class="notes-head"><span>방문객 반응: ♥ ${b.likes || 0} · 댓글 ${b.comments || 0}</span>
+    <span class="notes-btns"><button class="btn" data-act="cmts">댓글 관리</button></span></div><div class="notes-list" id="cmtAdmin"></div></div>`;
+}
+async function loadCmtAdmin(b){
+  const box = $("#cmtAdmin"); if (!box) return;
+  box.textContent = "불러오는 중…";
+  try { renderCmtAdmin(b, await api("shopcomments", { title: b.title })); }
+  catch (e) { box.textContent = "불러오지 못했어요: " + (e.message || "오류"); }
+}
+function renderCmtAdmin(b, r){
+  const box = $("#cmtAdmin"); if (!box) return;
+  box.innerHTML = r.comments.length ? r.comments.map(c => `<article class="note-item"><div class="nm">${esc(c.name)} · ${esc(c.at)}${c.status !== "공개" ? ` · <b>${esc(c.status)}</b>` : ""}</div><p>${esc(c.text)}</p>
+    <div class="notes-btns">${c.status === "공개" ? `<button class="btn" data-mod="hide" data-cid="${esc(c.id)}">숨기기</button>` : `<button class="btn" data-mod="show" data-cid="${esc(c.id)}">공개하기</button>`}<button class="btn danger" data-mod="delete" data-cid="${esc(c.id)}">지우기</button></div></article>`).join("") : "아직 댓글이 없어요.";
 }
 function notesHtml(b){
   const n = b.notes || 0;
@@ -775,7 +800,20 @@ function renderList(){
     return `<li><button data-id="${esc(b.id)}"><span class="t">${esc(b.title)}</span><span class="a">${esc(b.author || "")} ${d}</span></button></li>`;
   }).join("") : `<li class="empty">${emptyText}</li>`;
 }
+async function visitUrl(){
+  let id = "";
+  try { const a = await window.RN.getAuth(); const m = a && a.url && a.url.match(/\/s\/([A-Za-z0-9_-]{20,})\/exec/); id = m ? m[1] : ""; } catch {}
+  return id ? location.href.replace(/[^/]*([?#].*)?$/, "") + "visit.html#s=" + id : "";
+}
+async function renderPubBox(){
+  $("#pubOn").checked = data.pub.publicOn; $("#pubCovers").checked = data.pub.publicCovers;
+  $("#pubMemo").checked = data.pub.publicMemo; $("#pubReview").checked = data.pub.commentMode === "review";
+  const u = online ? await visitUrl() : "";
+  $("#pubOpen").href = u || "#"; $("#pubCopy").disabled = !u;
+  $("#pubHint").textContent = !u ? "독서노트에 로그인하면 링크가 만들어져요." : data.pub.publicOn ? "링크를 인스타 프로필이나 스토리 링크에 넣으면 누구나 책장을 둘러볼 수 있어요." : "지금은 닫혀 있어요. '방문객 화면 열기'를 켜야 손님이 볼 수 있어요.";
+}
 function renderAll(){
+  renderPubBox();
   $("#viewTodayBtn").textContent = recName() + " 책";
   $("#sinceText").textContent = `since ${openDot()} · ${openLine()}` + (wx ? ` · ${wxText()}` : "");
   if (document.activeElement !== $("#openDate")) $("#openDate").value = data.openDate || OPEN_DEFAULT;
@@ -1565,6 +1603,7 @@ $("#detail").addEventListener("click", e => {
   if (act === "back") select(b.id);
   else if (act === "edit") startEdit(b);
   else if (act === "notes") loadNotes(b);
+  else if (act === "cmts") loadCmtAdmin(b);
   else if (act === "write") { try { localStorage.setItem("rn_lastBook", b.title); } catch {} location.href = "index.html"; }
   else if (act === "crop") {
     (async () => { let src = coverSource.get(b.id);
@@ -1590,6 +1629,12 @@ $("#prev").addEventListener("click", () => turn(-1));
 $("#next").addEventListener("click", () => turn(1));
 document.querySelectorAll(".views button").forEach(b => b.addEventListener("click", () => goView(b.dataset.view)));
 $("#openDate").addEventListener("change", e => { if (/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) { data.openDate = e.target.value; renderAll(); persist(); } });
+[["#pubOn", "publicOn"], ["#pubCovers", "publicCovers"], ["#pubMemo", "publicMemo"]].forEach(([sel, k]) => $(sel).addEventListener("change", e => { data.pub[k] = e.target.checked; persist(); renderPubBox(); }));
+$("#pubReview").addEventListener("change", e => { data.pub.commentMode = e.target.checked ? "review" : "open"; persist(); });
+$("#pubCopy").addEventListener("click", async () => {
+  const u = await visitUrl(); if (!u) return;
+  try { await navigator.clipboard.writeText(u); toast("방문객 링크를 복사했어요"); } catch { prompt("이 주소를 복사하세요", u); }
+});
 let nameT; $("#shopName").addEventListener("input", e => { data.shopName = e.target.value.trim() || "작은책방"; $("#title").textContent = data.shopName; clearTimeout(nameT); nameT = setTimeout(() => { renderScene(); persist(); }, 250); });
 let menuT; $("#breads").addEventListener("input", e => { data.menu = e.target.value; clearTimeout(menuT); menuT = setTimeout(() => { renderScene(); persist(); }, 250); });
 $("#closeModal").addEventListener("click", () => { $("#imgModal").hidden = true; });

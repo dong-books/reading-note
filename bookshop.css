@@ -165,3 +165,10 @@ header .since{margin:4px 0 0;color:var(--muted);font-size:.85rem;letter-spacing:
 @keyframes wxRain{from{transform:translateY(0)}to{transform:translateY(160px)}}
 @keyframes wxSnow{from{transform:translateY(0)}to{transform:translateY(240px)}}
 @media (prefers-reduced-motion:reduce){.wx-rain,.wx-snow{animation:none}}
+
+.pubbox{margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)}
+.pubbox h3{font-family:var(--serif);font-size:1rem;margin:0 0 8px}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:.9rem;color:var(--ink);margin:6px 0}
+.chk input{width:auto;margin-top:4px}
+.chk small{display:block;color:var(--muted);font-size:.78rem}
+a.btn{text-decoration:none;color:var(--ink);display:inline-block}
