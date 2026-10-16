@@ -805,7 +805,18 @@ async function visitUrl(){
   try { const a = await window.RN.getAuth(); const m = a && a.url && a.url.match(/\/s\/([A-Za-z0-9_-]{20,})\/exec/); id = m ? m[1] : ""; } catch {}
   return id ? location.href.replace(/[^/]*([?#].*)?$/, "") + "visit.html#s=" + id : "";
 }
+let statsAt = 0;
+async function loadStats(force){
+  if (!online || (!force && Date.now() - statsAt < 60000)) return;
+  statsAt = Date.now();
+  try {
+    const r = await api("shopstats", {});
+    const top = (r.top || []).slice(0, 3).map(t => `${t.title} ${t.n}`).join(", ");
+    $("#pubStats").textContent = `오늘 방문 ${r.today}명 · 누적 ${r.total}명 · 책 보기 오늘 ${r.todayViews}번 (누적 ${r.views}번)` + (top ? ` · 많이 본 책: ${top}` : "");
+  } catch { $("#pubStats").textContent = ""; }
+}
 async function renderPubBox(){
+  loadStats(false);
   $("#pubOn").checked = data.pub.publicOn; $("#pubCovers").checked = data.pub.publicCovers;
   $("#pubMemo").checked = data.pub.publicMemo; $("#pubReview").checked = data.pub.commentMode === "review";
   const u = online ? await visitUrl() : "";

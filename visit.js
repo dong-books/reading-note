@@ -809,13 +809,17 @@ async function send(b){
     renderDetail(); toast(r.waiting ? "남겼어요. 책방지기가 확인하면 보여요" : "댓글을 남겼어요", 2500);
   } catch (e) { toast(e.message, 3000); btn.disabled = false; }
 }
-function select(id){ selectedId = selectedId === id ? null : id; renderScene(); renderDetail(); if (selectedId && innerWidth < 900) setTimeout(() => $("#detail").scrollIntoView({ behavior: "smooth", block: "nearest" }), 60); }
+/* 방문 기록 (책방지기 본인 기기는 세지 않음) */
+const ownerCheck = (async () => { try { return !!(window.RN && (await window.RN.getAuth())); } catch { return false; } })();
+async function hit(ev, extra){ if (await ownerCheck) return; pubCall("pubhit", Object.assign({ ev }, extra || {})).catch(() => {}); }
+let visitSent = false;
+function select(id){ selectedId = selectedId === id ? null : id; if (selectedId) { const hb = data.books.find(x => x.id === selectedId); if (hb) hit("book", { title: hb.title }); } renderScene(); renderDetail(); if (selectedId && innerWidth < 900) setTimeout(() => $("#detail").scrollIntoView({ behavior: "smooth", block: "nearest" }), 60); }
 function goView(v){
   if (v === "pick" || v === view) return;
   const forward = VIEW_ORDER[v] > VIEW_ORDER[view], svg = $("#scene"), box = svg.parentNode;
   box.querySelectorAll(".page").forEach(n => n.remove());
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches, oldPage = reduce ? null : svg.cloneNode(true);
-  selectedId = null; view = v; renderScene(); renderDetail();
+  selectedId = null; view = v; renderScene(); renderDetail(); hit("view", { view: v });
   if (!oldPage) return;
   oldPage.removeAttribute("id"); oldPage.classList.add("page");
   if (forward) { oldPage.classList.add("turn-out"); box.appendChild(oldPage); oldPage.addEventListener("animationend", () => oldPage.remove()); }
@@ -856,6 +860,7 @@ async function loadVisit(){
     const s = r.settings || {};
     data = normalize({ shopName: s.shopName, menu: s.menu, openDate: s.openDate, today: s.today, books: r.books });
     setNotice(""); renderAll();
+    if (!visitSent) { visitSent = true; hit("visit"); }
     if (s.publicCovers) {
       const ids = data.books.filter(b => b.cover && !/^[nw]_/.test(b.id)).map(b => b.id);
       for (let i = 0; i < ids.length; i += 30) { try { const t = await pubCall("pubthumbs", { ids: ids.slice(i, i + 30) }); Object.assign(thumbs, t.thumbs || {}); } catch { break; } }
